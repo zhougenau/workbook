@@ -1,0 +1,10 @@
+{
+  "name": "词屿 · 本地单词本",
+  "short_name": "词屿",
+  "description": "记录新单词、学习笔记与掌握程度",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f1e9",
+  "theme_color": "#171713",
+  "icons": [{ "src": "/wordbook.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
