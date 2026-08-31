@@ -189,6 +189,12 @@
 .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); font-family: var(--display); font-size: 22px; font-weight: 800; text-decoration: none; }
 .brand-mark { display: grid; width: 34px; height: 34px; place-items: center; color: var(--paper); background: var(--ink); }
 .header-actions, .card-actions { display: flex; gap: 8px; }
+.header-actions { align-items: center; }
+.datetime-status { display: grid; min-width: 218px; height: 38px; padding: 4px 11px 4px 36px; align-content: center; position: relative; color: var(--ink); background: var(--lime); border: 1px solid var(--ink); }
+.datetime-status svg { position: absolute; left: 11px; top: 10px; }
+.datetime-date { color: #596020; font-family: var(--mono); font-size: 10px; line-height: 1.15; }
+.datetime-date-compact { display: none; }
+.datetime-status strong { font-family: var(--mono); font-size: 13px; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .sync-button { display: inline-flex; height: 38px; padding: 0 12px; align-items: center; gap: 7px; color: var(--ink); font-size: 13px; background: transparent; border: 1px solid var(--line); cursor: pointer; }
 .sync-button:hover, .sync-button.synced { background: var(--lime); border-color: var(--ink); }
 .sync-button.syncing svg { animation: pulse 900ms ease-in-out infinite alternate; }
@@ -297,6 +303,9 @@
 @media (max-width: 820px) {
   .app-shell main, .app-shell footer { width: min(100% - 30px, 640px); }
   .topbar { height: 60px; padding: 0 15px; }
+  .datetime-status { min-width: 90px; padding-inline: 9px; text-align: center; }
+  .datetime-status svg, .datetime-date-full { display: none; }
+  .datetime-date-compact { display: block; }
   .cloud-panel { grid-template-columns: 1fr; padding: 20px; }
   .cloud-panel code { grid-column: auto; overflow-wrap: anywhere; }
   .login-options { width: 100%; }
@@ -327,6 +336,11 @@
 }
 
 @media (max-width: 420px) {
+  .brand { gap: 7px; font-size: 19px; }
+  .brand-mark { width: 30px; height: 30px; }
+  .header-actions { gap: 5px; }
+  .datetime-status { min-width: 79px; padding-inline: 5px; }
+  .datetime-status strong { font-size: 12px; }
   .sync-button span { display: none; }
   .sync-button { width: 38px; padding: 0; justify-content: center; }
   .cloud-actions, .login-form { flex-direction: column; }

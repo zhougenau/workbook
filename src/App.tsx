@@ -4,6 +4,7 @@ import {
   BookOpen,
   Check,
   ChevronDown,
+  Clock3,
   Cloud,
   CloudOff,
   Download,
@@ -43,6 +44,22 @@ function formatDate(value: string) {
   }).format(new Date(value))
 }
 
+function formatCurrentDate(value: Date, compact = false) {
+  return new Intl.DateTimeFormat('zh-CN', compact
+    ? { month: '2-digit', day: '2-digit' }
+    : { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' }
+  ).format(value)
+}
+
+function formatCurrentTime(value: Date) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(value)
+}
+
 function pronounce(text: string) {
   if (!Reflect.has(window, 'speechSynthesis')) {
     window.alert('当前浏览器不支持语音朗读')
@@ -74,6 +91,7 @@ function App() {
   const [sort, setSort] = useState('newest')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
+  const [currentTime, setCurrentTime] = useState(() => new Date())
   const syncTimer = useRef<number | null>(null)
 
   const performSync = async (activeUser: User) => {
@@ -126,6 +144,11 @@ function App() {
     }, 1000)
     return () => window.clearInterval(timer)
   }, [emailCooldown])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   const scheduleSync = (activeUser: User) => {
     if (syncTimer.current) window.clearTimeout(syncTimer.current)
@@ -320,6 +343,12 @@ function App() {
           <span>词屿</span>
         </a>
         <div className="header-actions">
+          <time className="datetime-status" dateTime={currentTime.toISOString()} aria-label={`当前日期和时间：${formatCurrentDate(currentTime)} ${formatCurrentTime(currentTime)}`}>
+            <Clock3 size={16} aria-hidden="true" />
+            <span className="datetime-date datetime-date-full">{formatCurrentDate(currentTime)}</span>
+            <span className="datetime-date datetime-date-compact">{formatCurrentDate(currentTime, true)}</span>
+            <strong>{formatCurrentTime(currentTime)}</strong>
+          </time>
           <button className={`sync-button ${syncState}`} type="button" onClick={() => setCloudOpen(!cloudOpen)} aria-label="云端同步">
             {isCloudConfigured ? <Cloud size={17} /> : <CloudOff size={17} />}
             <span>{user ? (syncState === 'syncing' ? '同步中' : '已登录') : '同步'}</span>

@@ -11,6 +11,7 @@
 - JSON 备份导入和导出
 - Dexie/IndexedDB 离线数据库，自动迁移旧版 `localStorage` 数据
 - Supabase Auth、PostgreSQL 云同步和用户级 RLS 权限
+- 页头实时显示当前日期和时间，适配手机与电脑布局
 - 响应式手机/电脑界面、PWA 安装信息和离线缓存
 
 ## 本地运行
