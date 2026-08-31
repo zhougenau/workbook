@@ -14,9 +14,19 @@
 - 页头实时显示当前日期和时间，适配手机与电脑布局
 - 响应式手机/电脑界面、PWA 安装信息和离线缓存
 
+## GitHub 仓库
+
+- 仓库地址：[zhougenau/workbook](https://github.com/zhougenau/workbook)
+- 默认分支：`main`
+- 克隆地址：`https://github.com/zhougenau/workbook.git`
+
 ## 本地运行
 
+首次从 GitHub 获取项目：
+
 ```powershell
+git clone https://github.com/zhougenau/workbook.git
+cd workbook
 npm install
 npm run dev
 ```
