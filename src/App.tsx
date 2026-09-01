@@ -2,6 +2,7 @@ import { type ChangeEvent, type FormEvent, useEffect, useEffectEvent, useRef, us
 import type { User } from '@supabase/supabase-js'
 import {
   BookOpen,
+  BrainCircuit,
   Check,
   ChevronDown,
   Clock3,
@@ -33,6 +34,7 @@ import {
 } from './storage'
 import { isCloudConfigured, supabase } from './supabase'
 import { synchronize } from './sync'
+import { ReviewPanel } from './ReviewPanel'
 import './App.css'
 
 const masteryLabels = ['未掌握', '刚认识', '有印象', '基本理解', '较熟练', '已掌握']
@@ -152,11 +154,36 @@ function App() {
   const [message, setMessage] = useState('')
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const [dictionaryEngine, setDictionaryEngine] = useState<DictionaryEngine>(loadDictionaryEngine)
+  const [reviewSelecting, setReviewSelecting] = useState(false)
+  const [selectedWordIds, setSelectedWordIds] = useState<string[]>([])
   const syncTimer = useRef<number | null>(null)
 
   const changeDictionaryEngine = (engine: DictionaryEngine) => {
     setDictionaryEngine(engine)
     window.localStorage.setItem(dictionaryEngineStorageKey, engine)
+  }
+
+  const toggleReviewSelection = () => {
+    if (!user) {
+      setCloudOpen(true)
+      setSyncMessage('AI 复习需要登录，以便服务端安全调用 DeepSeek。')
+      return
+    }
+    setReviewSelecting((active) => !active)
+    setSelectedWordIds([])
+  }
+
+  const toggleSelectedWord = (id: string) => {
+    setSelectedWordIds((selected) => selected.includes(id)
+      ? selected.filter((wordId) => wordId !== id)
+      : [...selected, id])
+  }
+
+  const prepareReviewWords = async () => {
+    if (!user) throw new Error('请先登录后再生成复习题')
+    await synchronize(user)
+    setEntries(await loadEntries(user.id))
+    setSyncState('synced')
   }
 
   const performSync = async (activeUser: User) => {
@@ -390,6 +417,8 @@ function App() {
     await supabase?.auth.signOut()
     setSyncState('local')
     setCloudOpen(false)
+    setReviewSelecting(false)
+    setSelectedWordIds([])
   }
 
   const normalizedSearch = search.trim().toLocaleLowerCase()
@@ -413,6 +442,7 @@ function App() {
 
   const masteredCount = entries.filter((entry) => entry.mastery === 5).length
   const learningCount = entries.filter((entry) => entry.mastery > 0 && entry.mastery < 5).length
+  const selectedWords = entries.filter((entry) => selectedWordIds.includes(entry.id))
 
   return (
     <div className="app-shell">
@@ -546,6 +576,10 @@ function App() {
           <div className="section-heading library-heading">
             <span className="section-number">02</span>
             <div><h2 id="library-title">我的单词本</h2><p>{visibleEntries.length} 个词条</p></div>
+            <button className={`review-start-button ${reviewSelecting ? 'active' : ''}`} type="button" onClick={toggleReviewSelection} disabled={!entries.length}>
+              {reviewSelecting ? <X size={17} /> : <BrainCircuit size={17} />}
+              {reviewSelecting ? '取消复习' : 'AI 复习'}
+            </button>
           </div>
 
           <div className="toolbar">
@@ -572,6 +606,17 @@ function App() {
             </label>
           </div>
 
+          {reviewSelecting && (
+            <ReviewPanel
+              selectedWords={selectedWords}
+              prepareWords={prepareReviewWords}
+              onClose={() => {
+                setReviewSelecting(false)
+                setSelectedWordIds([])
+              }}
+            />
+          )}
+
           {!visibleEntries.length ? (
             <div className="empty-state">
               <span><BookOpen size={28} /></span>
@@ -581,8 +626,15 @@ function App() {
           ) : (
             <div className="word-list">
               {visibleEntries.map((entry, index) => (
-                <article className="word-card" key={entry.id}>
-                  <div className="word-index">{String(index + 1).padStart(2, '0')}</div>
+                <article className={`word-card ${selectedWordIds.includes(entry.id) ? 'selected-for-review' : ''}`} key={entry.id}>
+                  <div className={`word-index ${reviewSelecting ? 'review-select-index' : ''}`}>
+                    {reviewSelecting ? (
+                      <label title={`选择 ${entry.term}`}>
+                        <input type="checkbox" checked={selectedWordIds.includes(entry.id)} onChange={() => toggleSelectedWord(entry.id)} aria-label={`选择 ${entry.term} 进行复习`} />
+                        <span><Check size={15} /></span>
+                      </label>
+                    ) : String(index + 1).padStart(2, '0')}
+                  </div>
                   <div className="word-content">
                     <div className="word-title-row">
                       <div>

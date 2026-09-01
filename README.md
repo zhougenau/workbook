@@ -8,6 +8,7 @@
 - 智能分析粘贴文本，自动提取单词、中文释义和例句并填入表单
 - 顶部可选择 Merriam-Webster、Cambridge、Bing 词典或爱词霸 iciba，默认使用 Merriam-Webster，选择会保存在当前设备
 - 已收录单词可一键打开所选在线词典，查看音标、词性、详细释义和更多例句
+- 登录后可勾选单词，由 DeepSeek V4 Flash 生成 5–10 道分级四选一复习题并即时评分
 - 0–5 级掌握度管理，默认值为 0
 - 搜索、掌握度筛选和多种排序方式
 - 编辑、删除、学习统计
@@ -110,6 +111,29 @@ VITE_SUPABASE_ANON_KEY=your-anon-publishable-key
 ```
 
 不要把 Supabase `service_role` 密钥放入前端环境变量。客户端只能使用 Publishable Key 或旧版 Anon Key，数据访问由 `schema.sql` 中的 RLS 策略保护。
+
+### 配置 DeepSeek AI 复习
+
+AI 复习采用服务端调用：浏览器只把所选词条 ID、题目数量和难度发给 Supabase Edge Function；函数验证当前 Supabase 用户，通过 RLS 读取该用户的已同步词条，再调用 `deepseek-v4-flash`。DeepSeek API Key 不会下发到浏览器。
+
+先进入 wordbook 项目根目录，再登录并关联 Supabase 项目，然后部署函数：
+
+```powershell
+cd C:\Users\xzhou11\Downloads\ai_sysdebug_agent\demo\wordbook
+npx supabase login
+npx supabase link --project-ref gvgztuwklhlhzorcoouh
+$secureKey = Read-Host "DeepSeek API Key" -AsSecureString
+$plainKey = [Net.NetworkCredential]::new('', $secureKey).Password
+npx supabase secrets set "DEEPSEEK_API_KEY=$plainKey"
+Remove-Variable secureKey, plainKey
+npx supabase functions deploy generate-review
+```
+
+函数控制台：[`generate-review`](https://supabase.com/dashboard/project/gvgztuwklhlhzorcoouh/functions)。部署时出现 `WARNING: Docker is not running` 可以忽略；Docker 只用于本地运行 Edge Function，不影响远程部署。若提示 `Entrypoint path does not exist`，说明命令不在 wordbook 项目根目录执行，请先运行上面的 `cd` 命令。
+
+以上 PowerShell 写法不会把真实 Key 写入命令历史或项目文件。不要创建 `VITE_DEEPSEEK_API_KEY`，也不要把 Key 放入 `.env.local`、GitHub 或 Vercel 前端环境变量；它只能保存在 Supabase Secrets 中。部署成功时 CLI 会显示 `Deployed Functions.`。
+
+使用时先登录，在单词库点击“AI 复习”，勾选 1–20 个单词，选择 5–10 道题及难度后生成。应用会先同步所选词条；未登录、未同步或不属于当前用户的词条不会被函数读取。
 
 ### 配置 Google 登录
 
