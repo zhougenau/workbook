@@ -5,6 +5,7 @@
 ## 已实现
 
 - 新增单词、释义和学习笔记，自动记录添加时间
+- 智能分析粘贴文本，自动提取单词、中文释义和例句并填入表单
 - 0–5 级掌握度管理，默认值为 0
 - 搜索、掌握度筛选和多种排序方式
 - 编辑、删除、学习统计
@@ -19,6 +20,28 @@
 - 仓库地址：[zhougenau/workbook](https://github.com/zhougenau/workbook)
 - 默认分支：`main`
 - 克隆地址：`https://github.com/zhougenau/workbook.git`
+
+## Vercel 部署
+
+- Vercel 项目：[fredzhou-5516/workbook](https://vercel.com/fredzhou-5516/workbook)
+- 生产站点：[打开词屿](https://workbook-fredzhou-5516.vercel.app)
+- 部署分支：`main`
+- Framework Preset：`Vite`
+- Build Command：`npm run build`
+- Output Directory：`dist`
+
+Vercel 已连接 GitHub 仓库。推送到 `main` 后会自动创建新的 Production Deployment，其他分支和 Pull Request 会生成 Preview Deployment。
+
+在 Vercel 项目的 `Settings → Environment Variables` 中配置以下变量，并为 Production、Preview 和 Development 环境选择所需范围：
+
+```text
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-publishable-key
+```
+
+当前生产部署启用了 Vercel Authentication，未登录 Vercel 的访客会跳转到 SSO 页面。要让手机和其他用户直接访问，请在 `Settings → Deployment Protection` 中关闭 Production 环境的访问保护，或按需配置允许访问的身份。
+
+发布新域名后，还需要将 `https://<your-vercel-domain>/**` 加入 Supabase `Authentication → URL Configuration → Redirect URLs`。Google 和 Microsoft Provider 继续使用 Supabase 显示的 `https://<project-ref>.supabase.co/auth/v1/callback` 作为 OAuth Callback URL。
 
 ## 本地运行
 
@@ -39,6 +62,26 @@ npm run preview
 ```
 
 清除浏览器站点数据会删除本地词条；迁移设备或清理浏览器前，请先使用页面右上角的导出按钮创建 JSON 备份。
+
+## 智能分析文本
+
+在“记下新单词”的“智能选取”框中粘贴包含单词、词性、音标、中文释义和例句的文字，然后点击“智能分析”。应用会自动填写单词、释义和例句字段；释义只截取中文内容，不保留英文词性、音标或英文解释。分析完成后可以修改各字段，确认无误再点击“收录单词”写入数据库。
+
+示例输入：
+
+```text
+convivial adj.
+/kənˈvɪviəl/欢乐友好的（聚会）
+**e.g.** The dinner had a *convivial* atmosphere, full of laughter and toasts.
+```
+
+分析结果：
+
+```text
+单词：convivial
+释义：欢乐友好的（聚会）
+例句：The dinner had a *convivial* atmosphere, full of laughter and toasts.
+```
 
 ## 开启跨浏览器同步
 

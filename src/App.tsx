@@ -14,6 +14,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Sparkles,
   Trash2,
   Upload,
   Volume2,
@@ -60,6 +61,36 @@ function formatCurrentTime(value: Date) {
   }).format(value)
 }
 
+function extractChineseMeaning(value: string) {
+  const normalized = value.replace(/\(([\u3400-\u9fff，、；：。！？\s]+)\)/gu, '（$1）')
+  return normalized.match(/[\u3400-\u9fff（），、；：。！？]+/gu)?.join('') ?? ''
+}
+
+function analyzeVocabularyText(source: string) {
+  const text = source.trim()
+  if (!text) return null
+
+  const exampleMarker = /(?:\*{0,2}(?:e\.?\s*g\.?|example|例句)\*{0,2})\s*[:：.]?\s*/i
+  const markerMatch = exampleMarker.exec(text)
+  const beforeExample = markerMatch ? text.slice(0, markerMatch.index).trim() : text
+  const example = markerMatch ? text.slice(markerMatch.index + markerMatch[0].length).trim() : ''
+  const lines = beforeExample.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  const heading = lines[0] ?? ''
+  const termMatch = heading.match(/^([A-Za-z][A-Za-z'’-]*(?:[ -][A-Za-z][A-Za-z'’-]*)*)\s*(?=(?:adj|adv|noun|verb|prep|pron|conj|interj|n|v)\b|$)/i)
+  const term = (termMatch?.[1] ?? heading.match(/[A-Za-z][A-Za-z'’-]*/)?.[0] ?? '').trim()
+  const headingRemainder = heading
+    .slice(termMatch?.[0].length ?? term.length)
+    .replace(/^(?:adj|adv|noun|verb|prep|pron|conj|interj|n|v)\.?\s*/i, '')
+    .trim()
+  const meaning = extractChineseMeaning([headingRemainder, ...lines.slice(1)]
+    .join(' ')
+    .replace(/^\/[^/\r\n]+\/\s*/, '')
+    .replace(/^(?:adj|adv|noun|verb|prep|pron|conj|interj|n|v)\.?\s*/i, '')
+    .trim())
+
+  return { term, meaning, example }
+}
+
 function pronounce(text: string) {
   if (!Reflect.has(window, 'speechSynthesis')) {
     window.alert('当前浏览器不支持语音朗读')
@@ -86,6 +117,7 @@ function App() {
   const [term, setTerm] = useState('')
   const [meaning, setMeaning] = useState('')
   const [note, setNote] = useState('')
+  const [analysisSource, setAnalysisSource] = useState('')
   const [search, setSearch] = useState('')
   const [masteryFilter, setMasteryFilter] = useState('all')
   const [sort, setSort] = useState('newest')
@@ -191,7 +223,21 @@ function App() {
     setTerm('')
     setMeaning('')
     setNote('')
+    setAnalysisSource('')
     setMessage(`已收录 “${entry.term}”`)
+  }
+
+  const handleSmartAnalysis = () => {
+    const result = analyzeVocabularyText(analysisSource)
+    if (!result?.term) {
+      setMessage('未识别到单词，请检查粘贴内容')
+      return
+    }
+
+    setTerm(result.term)
+    setMeaning(result.meaning)
+    setNote(result.example)
+    setMessage(result.meaning || result.example ? '智能分析完成，请确认后收录' : '已识别单词，请补充释义和例句')
   }
 
   const updateEntry = async (id: string, patch: Partial<VocabularyEntry>) => {
@@ -421,6 +467,22 @@ function App() {
             <div><h2 id="capture-title">记下新单词</h2><p>先收录，再慢慢理解。</p></div>
           </div>
           <form className="word-form" onSubmit={handleSubmit}>
+            <div className="smart-analyzer">
+              <label htmlFor="analysis-source">
+                <span><Sparkles size={15} />智能选取</span>
+                <small>粘贴包含单词、词性、音标、释义和例句的文字</small>
+              </label>
+              <textarea
+                id="analysis-source"
+                value={analysisSource}
+                onChange={(event) => setAnalysisSource(event.target.value)}
+                placeholder={'convivial adj.\n/kənˈvɪviəl/欢乐友好的（聚会）\n**e.g.** The dinner had a *convivial* atmosphere, full of laughter and toasts.'}
+                rows={4}
+              />
+              <button type="button" onClick={handleSmartAnalysis} disabled={!analysisSource.trim()}>
+                <Sparkles size={17} />智能分析
+              </button>
+            </div>
             <label className="field term-field">
               <span>单词或短语</span>
               <input value={term} onChange={(event) => setTerm(event.target.value)} placeholder="serendipity" autoFocus />
