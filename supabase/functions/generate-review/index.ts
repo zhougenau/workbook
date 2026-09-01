@@ -21,6 +21,12 @@ type ReviewRequest = {
   difficulty: string
 }
 
+type TokenUsage = {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -119,7 +125,13 @@ async function callDeepSeek(apiKey: string, request: ReviewRequest, words: Vocab
     const payload = await response.json()
     const content = payload?.choices?.[0]?.message?.content
     if (typeof content !== 'string' || !content.trim()) throw new Error('DeepSeek 返回了空内容')
-    return JSON.parse(content)
+    const usage = payload?.usage
+    const tokenUsage: TokenUsage = {
+      promptTokens: Number.isInteger(usage?.prompt_tokens) ? usage.prompt_tokens : 0,
+      completionTokens: Number.isInteger(usage?.completion_tokens) ? usage.completion_tokens : 0,
+      totalTokens: Number.isInteger(usage?.total_tokens) ? usage.total_tokens : 0,
+    }
+    return { content, tokenUsage }
   } finally {
     clearTimeout(timeout)
   }
@@ -169,11 +181,15 @@ Deno.serve(async (request) => {
   }
 
   let lastError = 'AI 返回的题目格式不正确'
+  const tokenUsage: TokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const generated = await callDeepSeek(deepSeekApiKey, reviewRequest, words)
-      const quiz = validateQuiz(generated, reviewRequest, words)
-      if (quiz) return jsonResponse(quiz)
+      const result = await callDeepSeek(deepSeekApiKey, reviewRequest, words)
+      tokenUsage.promptTokens += result.tokenUsage.promptTokens
+      tokenUsage.completionTokens += result.tokenUsage.completionTokens
+      tokenUsage.totalTokens += result.tokenUsage.totalTokens
+      const quiz = validateQuiz(JSON.parse(result.content), reviewRequest, words)
+      if (quiz) return jsonResponse({ ...quiz, tokenUsage })
       lastError = 'AI 未能生成完整的四选一题'
     } catch (cause) {
       lastError = cause instanceof Error ? cause.message : 'AI 服务调用失败'

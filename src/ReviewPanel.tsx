@@ -15,6 +15,16 @@ const difficultyLabels: Record<ReviewDifficulty, string> = {
   advanced: '挑战',
 }
 
+function TokenUsage({ quiz }: { quiz: ReviewQuiz }) {
+  return (
+    <dl className="review-token-usage" aria-label="本次 AI Token 用量">
+      <div><dt>输入</dt><dd>{quiz.tokenUsage.promptTokens.toLocaleString()}</dd></div>
+      <div><dt>输出</dt><dd>{quiz.tokenUsage.completionTokens.toLocaleString()}</dd></div>
+      <div><dt>总计</dt><dd>{quiz.tokenUsage.totalTokens.toLocaleString()} Tokens</dd></div>
+    </dl>
+  )
+}
+
 export function ReviewPanel({ selectedWords, prepareWords, onClose }: ReviewPanelProps) {
   const [questionCount, setQuestionCount] = useState(5)
   const [difficulty, setDifficulty] = useState<ReviewDifficulty>('basic')
@@ -96,6 +106,7 @@ export function ReviewPanel({ selectedWords, prepareWords, onClose }: ReviewPane
         <strong>{score}<small> / {quiz.questions.length}</small></strong>
         <h3>{score === quiz.questions.length ? '全部答对' : '本轮复习完成'}</h3>
         <p>正确率 {Math.round((score / quiz.questions.length) * 100)}%。可以再答一次，或重新选择单词生成新题。</p>
+        <TokenUsage quiz={quiz} />
         <div className="review-result-actions">
           <button type="button" onClick={restart}><RotateCcw size={17} />再答一次</button>
           <button type="button" onClick={() => setQuiz(null)}><BrainCircuit size={17} />重新生成</button>
@@ -115,6 +126,7 @@ export function ReviewPanel({ selectedWords, prepareWords, onClose }: ReviewPane
         <span>{quiz.title}</span>
         <strong>{currentIndex + 1} / {quiz.questions.length}</strong>
       </div>
+      <TokenUsage quiz={quiz} />
       <div className="review-progress-track"><span style={{ width: `${((currentIndex + 1) / quiz.questions.length) * 100}%` }} /></div>
       <span className="review-question-type">{question.word} · {question.type}</span>
       <h3 id="review-question-title">{question.prompt}</h3>

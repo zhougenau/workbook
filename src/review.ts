@@ -17,6 +17,11 @@ export type ReviewQuestion = {
 export type ReviewQuiz = {
   title: string
   questions: ReviewQuestion[]
+  tokenUsage: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }
 }
 
 const questionTypes = new Set<ReviewQuestionType>(['meaning', 'reverse', 'cloze', 'usage'])
@@ -48,6 +53,15 @@ function parseReviewQuiz(value: unknown, expectedCount: number): ReviewQuiz {
   }
   if (quiz.questions.length !== expectedCount || !quiz.questions.every(isQuestion)) {
     throw new Error(`AI 未能生成完整的 ${expectedCount} 道四选一题，请重试`)
+  }
+  const tokenUsage = quiz.tokenUsage as Record<string, unknown> | undefined
+  if (
+    !tokenUsage ||
+    !Number.isInteger(tokenUsage.promptTokens) || Number(tokenUsage.promptTokens) < 0 ||
+    !Number.isInteger(tokenUsage.completionTokens) || Number(tokenUsage.completionTokens) < 0 ||
+    !Number.isInteger(tokenUsage.totalTokens) || Number(tokenUsage.totalTokens) < 0
+  ) {
+    throw new Error('AI 返回的 Token 用量格式不正确')
   }
   return quiz as ReviewQuiz
 }

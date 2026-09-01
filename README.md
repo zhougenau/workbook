@@ -8,7 +8,7 @@
 - 智能分析粘贴文本，自动提取单词、中文释义和例句并填入表单
 - 顶部可选择 Merriam-Webster、Cambridge、Bing 词典或爱词霸 iciba，默认使用 Merriam-Webster，选择会保存在当前设备
 - 已收录单词可一键打开所选在线词典，查看音标、词性、详细释义和更多例句
-- 登录后可勾选单词，由 DeepSeek V4 Flash 生成 5–10 道分级四选一复习题并即时评分
+- 登录后可勾选单词，由 DeepSeek V4 Flash 生成 5–10 道分级四选一复习题，即时评分并显示本次输入、输出和总 Token 用量
 - 0–5 级掌握度管理，默认值为 0
 - 搜索、掌握度筛选和多种排序方式
 - 编辑、删除、学习统计
@@ -134,6 +134,8 @@ npx supabase functions deploy generate-review
 以上 PowerShell 写法不会把真实 Key 写入命令历史或项目文件。不要创建 `VITE_DEEPSEEK_API_KEY`，也不要把 Key 放入 `.env.local`、GitHub 或 Vercel 前端环境变量；它只能保存在 Supabase Secrets 中。部署成功时 CLI 会显示 `Deployed Functions.`。
 
 使用时先登录，在单词库点击“AI 复习”，勾选 1–20 个单词，选择 5–10 道题及难度后生成。应用会先同步所选词条；未登录、未同步或不属于当前用户的词条不会被函数读取。
+
+答题页和结果页会显示本次 DeepSeek 调用的输入、输出及总 Token 数。若模型首次返回无效题目并触发自动重试，页面显示的是两次调用的累计用量；这里只显示 Token 数量，不包含 API Key 或其他敏感信息。
 
 ### 配置 Google 登录
 
