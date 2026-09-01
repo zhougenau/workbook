@@ -45,7 +45,11 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
     setError('')
     try {
       await prepareWords()
-      const result = await generateReview(selectedWords.map((word) => word.id), questionCount, difficulty)
+      const wordIds = selectedWords
+        .map((word) => word.id)
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 20)
+      const result = await generateReview(wordIds, questionCount, difficulty)
       setQuiz(result)
       setCurrentIndex(0)
       setAnswers({})
@@ -72,7 +76,7 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
           <div>
             <span className="review-kicker"><BrainCircuit size={16} />DEEPSEEK AI REVIEW</span>
             <h3 id="review-panel-title">生成选择题</h3>
-            <p>已选择 {selectedWords.length} 个单词，AI 将生成 5–10 道四选一题。</p>
+            <p>已选择 {selectedWords.length} 个单词，AI 将生成 5–10 道四选一题{selectedWords.length > 20 ? '，本轮随机抽取 20 个词' : ''}。</p>
           </div>
           <button className="review-close" type="button" onClick={onClose} title="退出复习选择" aria-label="退出复习选择"><X size={18} /></button>
         </div>

@@ -4,6 +4,7 @@ import {
   BookOpen,
   BrainCircuit,
   Check,
+  CheckSquare2,
   ChevronDown,
   Clock3,
   Cloud,
@@ -178,6 +179,10 @@ function App() {
     setSelectedWordIds((selected) => selected.includes(id)
       ? selected.filter((wordId) => wordId !== id)
       : [...selected, id])
+  }
+
+  const toggleSelectAllWords = () => {
+    setSelectedWordIds((selected) => selected.length === entries.length ? [] : entries.map((entry) => entry.id))
   }
 
   const prepareReviewWords = async () => {
@@ -459,6 +464,7 @@ function App() {
   const masteredCount = entries.filter((entry) => entry.mastery === 5).length
   const learningCount = entries.filter((entry) => entry.mastery > 0 && entry.mastery < 5).length
   const selectedWords = entries.filter((entry) => selectedWordIds.includes(entry.id))
+  const allWordsSelected = entries.length > 0 && selectedWordIds.length === entries.length
 
   return (
     <div className="app-shell">
@@ -623,15 +629,24 @@ function App() {
           </div>
 
           {reviewSelecting && (
-            <ReviewPanel
-              selectedWords={selectedWords}
-              prepareWords={prepareReviewWords}
-              applyMasteryChanges={applyReviewMasteryChanges}
-              onClose={() => {
-                setReviewSelecting(false)
-                setSelectedWordIds([])
-              }}
-            />
+            <>
+              <div className="review-selection-bar">
+                <span>已选择 <strong>{selectedWordIds.length}</strong> / {entries.length} 个单词</span>
+                <button type="button" onClick={toggleSelectAllWords}>
+                  {allWordsSelected ? <X size={16} /> : <CheckSquare2 size={16} />}
+                  {allWordsSelected ? '清空选择' : '一键全选'}
+                </button>
+              </div>
+              <ReviewPanel
+                selectedWords={selectedWords}
+                prepareWords={prepareReviewWords}
+                applyMasteryChanges={applyReviewMasteryChanges}
+                onClose={() => {
+                  setReviewSelecting(false)
+                  setSelectedWordIds([])
+                }}
+              />
+            </>
           )}
 
           {!visibleEntries.length ? (
