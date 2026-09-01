@@ -6,6 +6,8 @@
 
 - 新增单词、释义和学习笔记，自动记录添加时间
 - 智能分析粘贴文本，自动提取单词、中文释义和例句并填入表单
+- 顶部可选择 Merriam-Webster、Cambridge、Bing 词典或爱词霸 iciba，默认使用 Merriam-Webster，选择会保存在当前设备
+- 已收录单词可一键打开所选在线词典，查看音标、词性、详细释义和更多例句
 - 0–5 级掌握度管理，默认值为 0
 - 搜索、掌握度筛选和多种排序方式
 - 编辑、删除、学习统计
@@ -82,6 +84,17 @@ convivial adj.
 释义：欢乐友好的（聚会）
 例句：The dinner had a *convivial* atmosphere, full of laughter and toasts.
 ```
+
+## 网络解释引擎
+
+页面顶部可以选择 Merriam-Webster、Cambridge、Bing 词典或爱词霸 iciba。默认使用 Merriam-Webster，当前选择保存在浏览器本地；点击已收录单词旁的外部链接按钮，会在新标签页打开所选词典。
+
+- Merriam-Webster：`https://www.merriam-webster.com/dictionary/<word>`
+- Cambridge：`https://dictionary.cambridge.org/dictionary/english/<word>`
+- Bing 词典：`https://www.bing.com/dict/search?q=<word>`
+- 爱词霸 iciba：`https://www.iciba.com/word?w=<word>`
+
+例如，选择 Merriam-Webster 查询 `apple` 时会打开 `https://www.merriam-webster.com/dictionary/apple`；选择爱词霸时会打开 `https://www.iciba.com/word?w=apple`。
 
 ## 开启跨浏览器同步
 

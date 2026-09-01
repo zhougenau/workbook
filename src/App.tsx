@@ -9,6 +9,7 @@ import {
   CloudOff,
   Download,
   Edit3,
+  ExternalLink,
   LogIn,
   LogOut,
   Plus,
@@ -35,6 +36,32 @@ import { synchronize } from './sync'
 import './App.css'
 
 const masteryLabels = ['未掌握', '刚认识', '有印象', '基本理解', '较熟练', '已掌握']
+const dictionaryEngines = {
+  merriamWebster: {
+    label: 'Merriam-Webster',
+    getUrl: (term: string) => `https://www.merriam-webster.com/dictionary/${encodeURIComponent(term)}`,
+  },
+  cambridge: {
+    label: 'Cambridge',
+    getUrl: (term: string) => `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(term)}`,
+  },
+  bing: {
+    label: 'Bing 词典',
+    getUrl: (term: string) => `https://www.bing.com/dict/search?q=${encodeURIComponent(term)}`,
+  },
+  iciba: {
+    label: '爱词霸 iciba',
+    getUrl: (term: string) => `https://www.iciba.com/word?w=${encodeURIComponent(term)}`,
+  },
+} as const
+
+type DictionaryEngine = keyof typeof dictionaryEngines
+const dictionaryEngineStorageKey = 'wordbook:dictionary-engine'
+
+function loadDictionaryEngine(): DictionaryEngine {
+  const savedEngine = window.localStorage.getItem(dictionaryEngineStorageKey)
+  return savedEngine && savedEngine in dictionaryEngines ? savedEngine as DictionaryEngine : 'merriamWebster'
+}
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -124,7 +151,13 @@ function App() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [currentTime, setCurrentTime] = useState(() => new Date())
+  const [dictionaryEngine, setDictionaryEngine] = useState<DictionaryEngine>(loadDictionaryEngine)
   const syncTimer = useRef<number | null>(null)
+
+  const changeDictionaryEngine = (engine: DictionaryEngine) => {
+    setDictionaryEngine(engine)
+    window.localStorage.setItem(dictionaryEngineStorageKey, engine)
+  }
 
   const performSync = async (activeUser: User) => {
     if (!navigator.onLine) return
@@ -389,6 +422,15 @@ function App() {
           <span>词屿</span>
         </a>
         <div className="header-actions">
+          <label className="dictionary-engine">
+            <span>网络解释</span>
+            <select value={dictionaryEngine} onChange={(event) => changeDictionaryEngine(event.target.value as DictionaryEngine)} aria-label="网络解释引擎">
+              {Object.entries(dictionaryEngines).map(([value, engine]) => (
+                <option key={value} value={value}>{engine.label}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} aria-hidden="true" />
+          </label>
           <time className="datetime-status" dateTime={currentTime.toISOString()} aria-label={`当前日期和时间：${formatCurrentDate(currentTime)} ${formatCurrentTime(currentTime)}`}>
             <Clock3 size={16} aria-hidden="true" />
             <span className="datetime-date datetime-date-full">{formatCurrentDate(currentTime)}</span>
@@ -553,6 +595,9 @@ function App() {
                         <time dateTime={entry.createdAt}>添加于 {formatDate(entry.createdAt)}</time>
                       </div>
                       <div className="card-actions">
+                        <a href={dictionaryEngines[dictionaryEngine].getUrl(entry.term)} target="_blank" rel="noreferrer" title={`使用 ${dictionaryEngines[dictionaryEngine].label} 查看 ${entry.term} 的详细解释`} aria-label={`使用 ${dictionaryEngines[dictionaryEngine].label} 查看 ${entry.term} 的详细解释`}>
+                          <ExternalLink size={17} />
+                        </a>
                         <button type="button" onClick={() => setEditingId(editingId === entry.id ? null : entry.id)} title="编辑"><Edit3 size={17} /></button>
                         <button type="button" onClick={() => deleteEntry(entry)} title="删除"><Trash2 size={17} /></button>
                       </div>
