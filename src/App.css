@@ -311,6 +311,22 @@
 .review-token-usage dt, .review-token-usage dd { margin: 0; }
 .review-token-usage dd { color: var(--paper); font-weight: 700; }
 .review-result .review-token-usage { justify-content: center; margin-top: 14px; }
+.mastery-review { max-width: 620px; margin: 20px auto 0; padding: 16px; text-align: left; background: #24241f; border: 1px solid #5e5a54; }
+.mastery-review-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.mastery-review-heading > strong { color: var(--paper); font-size: 13px; }
+.mastery-review-heading > span { color: #aaa7a1; font-size: 10px; }
+.mastery-review ul { margin: 12px 0 0; padding: 0; list-style: none; }
+.mastery-review li { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 18px; border-top: 1px solid #45433e; }
+.mastery-review li > span { display: grid; gap: 2px; }
+.mastery-review li b { color: var(--paper); font-size: 13px; }
+.mastery-review li small { color: #aaa7a1; font-family: var(--mono); font-size: 9px; }
+.mastery-review li > strong { color: #aaa7a1; font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+.mastery-review li > strong.up { color: var(--lime); }
+.mastery-review li > strong.down { color: var(--coral); }
+.apply-mastery-button { display: inline-flex; width: 100%; min-height: 40px; margin-top: 12px; align-items: center; justify-content: center; gap: 7px; color: var(--ink); font-weight: 700; background: var(--lime); border: 1px solid var(--lime); cursor: pointer; }
+.apply-mastery-button:disabled { opacity: .5; cursor: not-allowed; }
+.mastery-saved, .mastery-unchanged { display: flex; margin-top: 12px !important; align-items: center; justify-content: center; gap: 6px; }
+.mastery-saved { color: var(--lime) !important; }
 .review-progress-track { height: 4px; margin: 12px 0 24px; background: #3b3a35; }
 .review-progress-track span { display: block; height: 100%; background: var(--lime); transition: width 200ms ease; }
 .review-question-type { color: var(--coral); font-family: var(--mono); font-size: 11px; text-transform: uppercase; }

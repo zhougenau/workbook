@@ -35,6 +35,7 @@ import {
 import { isCloudConfigured, supabase } from './supabase'
 import { synchronize } from './sync'
 import { ReviewPanel } from './ReviewPanel'
+import type { MasteryChange } from './review'
 import './App.css'
 
 const masteryLabels = ['未掌握', '刚认识', '有印象', '基本理解', '较熟练', '已掌握']
@@ -184,6 +185,21 @@ function App() {
     await synchronize(user)
     setEntries(await loadEntries(user.id))
     setSyncState('synced')
+  }
+
+  const applyReviewMasteryChanges = async (changes: MasteryChange[]) => {
+    const levels = new Map(changes.map((change) => [change.wordId, change.nextLevel]))
+    const now = new Date().toISOString()
+    const nextEntries = entries.map((entry) => {
+      const mastery = levels.get(entry.id)
+      return mastery === undefined ? entry : {
+        ...entry,
+        mastery,
+        updatedAt: now,
+        syncStatus: user ? 'pending' as const : 'local' as const,
+      }
+    })
+    await updateEntries(nextEntries)
   }
 
   const performSync = async (activeUser: User) => {
@@ -610,6 +626,7 @@ function App() {
             <ReviewPanel
               selectedWords={selectedWords}
               prepareWords={prepareReviewWords}
+              applyMasteryChanges={applyReviewMasteryChanges}
               onClose={() => {
                 setReviewSelecting(false)
                 setSelectedWordIds([])

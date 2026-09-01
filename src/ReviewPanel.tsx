@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { ArrowRight, BrainCircuit, Check, LoaderCircle, RotateCcw, X } from 'lucide-react'
-import { generateReview, type ReviewDifficulty, type ReviewQuiz } from './review'
+import { calculateMasteryChanges, generateReview, type MasteryChange, type ReviewDifficulty, type ReviewQuiz } from './review'
 import type { VocabularyEntry } from './storage'
 
 type ReviewPanelProps = {
   selectedWords: VocabularyEntry[]
   prepareWords: () => Promise<void>
+  applyMasteryChanges: (changes: MasteryChange[]) => Promise<void>
   onClose: () => void
 }
 
@@ -25,7 +26,7 @@ function TokenUsage({ quiz }: { quiz: ReviewQuiz }) {
   )
 }
 
-export function ReviewPanel({ selectedWords, prepareWords, onClose }: ReviewPanelProps) {
+export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, onClose }: ReviewPanelProps) {
   const [questionCount, setQuestionCount] = useState(5)
   const [difficulty, setDifficulty] = useState<ReviewDifficulty>('basic')
   const [quiz, setQuiz] = useState<ReviewQuiz | null>(null)
@@ -34,6 +35,9 @@ export function ReviewPanel({ selectedWords, prepareWords, onClose }: ReviewPane
   const [completed, setCompleted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [masteryApplied, setMasteryApplied] = useState(false)
+  const [applyingMastery, setApplyingMastery] = useState(false)
+  const [masteryChanges, setMasteryChanges] = useState<MasteryChange[]>([])
 
   const createQuiz = async () => {
     if (!selectedWords.length || loading) return
@@ -46,6 +50,8 @@ export function ReviewPanel({ selectedWords, prepareWords, onClose }: ReviewPane
       setCurrentIndex(0)
       setAnswers({})
       setCompleted(false)
+      setMasteryApplied(false)
+      setMasteryChanges([])
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'AI 复习题生成失败')
     } finally {
@@ -98,6 +104,26 @@ export function ReviewPanel({ selectedWords, prepareWords, onClose }: ReviewPane
     (total, question, index) => total + (answers[index] === question.correctIndex ? 1 : 0),
     0,
   )
+  const changedMastery = masteryChanges.filter((change) => change.nextLevel !== change.previousLevel)
+
+  const finishReview = () => {
+    if (!masteryApplied) setMasteryChanges(calculateMasteryChanges(quiz, answers, selectedWords, difficulty))
+    setCompleted(true)
+  }
+
+  const confirmMasteryChanges = async () => {
+    if (masteryApplied || applyingMastery || !changedMastery.length) return
+    setApplyingMastery(true)
+    setError('')
+    try {
+      await applyMasteryChanges(changedMastery)
+      setMasteryApplied(true)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '掌握程度保存失败')
+    } finally {
+      setApplyingMastery(false)
+    }
+  }
 
   if (completed) {
     return (
@@ -107,6 +133,33 @@ export function ReviewPanel({ selectedWords, prepareWords, onClose }: ReviewPane
         <h3>{score === quiz.questions.length ? '全部答对' : '本轮复习完成'}</h3>
         <p>正确率 {Math.round((score / quiz.questions.length) * 100)}%。可以再答一次，或重新选择单词生成新题。</p>
         <TokenUsage quiz={quiz} />
+        <div className="mastery-review" aria-label="掌握程度建议">
+          <div className="mastery-review-heading">
+            <strong>掌握程度建议</strong>
+            <span>每轮最多调整 1 级</span>
+          </div>
+          <ul>
+            {masteryChanges.map((change) => (
+              <li key={change.wordId}>
+                <span><b>{change.term}</b><small>{change.correctCount}/{change.questionCount} 题正确 · 证据 {change.evidence > 0 ? '+' : ''}{change.evidence}</small></span>
+                <strong className={change.nextLevel > change.previousLevel ? 'up' : change.nextLevel < change.previousLevel ? 'down' : ''}>
+                  {change.previousLevel} → {change.nextLevel}
+                </strong>
+              </li>
+            ))}
+          </ul>
+          {masteryApplied ? (
+            <p className="mastery-saved"><Check size={15} />已保存并等待云同步</p>
+          ) : changedMastery.length ? (
+            <button className="apply-mastery-button" type="button" onClick={() => void confirmMasteryChanges()} disabled={applyingMastery}>
+              {applyingMastery ? <LoaderCircle className="spin" size={17} /> : <Check size={17} />}
+              {applyingMastery ? '正在保存…' : `应用 ${changedMastery.length} 个调整`}
+            </button>
+          ) : (
+            <p className="mastery-unchanged">本轮证据不足，掌握程度保持不变</p>
+          )}
+          {error && <p className="review-error" role="alert">{error}</p>}
+        </div>
         <div className="review-result-actions">
           <button type="button" onClick={restart}><RotateCcw size={17} />再答一次</button>
           <button type="button" onClick={() => setQuiz(null)}><BrainCircuit size={17} />重新生成</button>
@@ -160,7 +213,7 @@ export function ReviewPanel({ selectedWords, prepareWords, onClose }: ReviewPane
           className="review-next"
           type="button"
           disabled={!answered}
-          onClick={() => currentIndex === quiz.questions.length - 1 ? setCompleted(true) : setCurrentIndex((index) => index + 1)}
+          onClick={() => currentIndex === quiz.questions.length - 1 ? finishReview() : setCurrentIndex((index) => index + 1)}
         >
           {currentIndex === quiz.questions.length - 1 ? '查看结果' : '下一题'}<ArrowRight size={17} />
         </button>
