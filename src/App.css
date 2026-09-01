@@ -350,7 +350,8 @@
 .review-question-actions, .review-result-actions { display: flex; margin-top: 20px; align-items: center; justify-content: space-between; gap: 10px; }
 .review-question-actions button, .review-result-actions button { display: inline-flex; min-height: 40px; padding: 0 14px; align-items: center; justify-content: center; gap: 7px; color: var(--paper); background: transparent; border: 1px solid #5e5a54; cursor: pointer; }
 .review-question-actions .review-next, .review-result-actions button:last-child { color: var(--ink); background: var(--lime); border-color: var(--lime); }
-.review-question-actions button:disabled { opacity: .35; cursor: not-allowed; }
+.review-result-actions .reinforce-review-button { color: var(--ink); background: var(--coral); border-color: var(--coral); font-weight: 700; }
+.review-question-actions button:disabled, .review-result-actions button:disabled { opacity: .35; cursor: not-allowed; }
 .review-result { text-align: center; border-left-color: var(--coral); }
 .review-result > strong { display: block; margin: 8px 0 2px; color: var(--lime); font-family: var(--display); font-size: 72px; line-height: 1; }
 .review-result > strong small { color: #aaa7a1; font-size: 24px; }

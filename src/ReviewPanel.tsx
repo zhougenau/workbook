@@ -39,13 +39,13 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
   const [applyingMastery, setApplyingMastery] = useState(false)
   const [masteryChanges, setMasteryChanges] = useState<MasteryChange[]>([])
 
-  const createQuiz = async () => {
-    if (!selectedWords.length || loading) return
+  const createQuiz = async (reviewWordIds?: string[]) => {
+    if ((!selectedWords.length && !reviewWordIds?.length) || loading) return
     setLoading(true)
     setError('')
     try {
       await prepareWords()
-      const wordIds = selectedWords
+      const wordIds = reviewWordIds ?? selectedWords
         .map((word) => word.id)
         .sort(() => Math.random() - 0.5)
         .slice(0, 20)
@@ -109,6 +109,9 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
     0,
   )
   const changedMastery = masteryChanges.filter((change) => change.nextLevel !== change.previousLevel)
+  const incorrectWordIds = [...new Set(quiz.questions
+    .filter((question, index) => answers[index] !== question.correctIndex)
+    .map((question) => question.wordId))]
 
   const finishReview = () => {
     if (!masteryApplied) setMasteryChanges(calculateMasteryChanges(quiz, answers, selectedWords, difficulty))
@@ -166,6 +169,12 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
         </div>
         <div className="review-result-actions">
           <button type="button" onClick={restart}><RotateCcw size={17} />再答一次</button>
+          {!!incorrectWordIds.length && (
+            <button className="reinforce-review-button" type="button" onClick={() => void createQuiz(incorrectWordIds)} disabled={loading}>
+              {loading ? <LoaderCircle className="spin" size={17} /> : <BrainCircuit size={17} />}
+              {loading ? '正在生成…' : `强化复习 ${incorrectWordIds.length} 个错词`}
+            </button>
+          )}
           <button type="button" onClick={() => setQuiz(null)}><BrainCircuit size={17} />重新生成</button>
           <button type="button" onClick={onClose}>完成</button>
         </div>
