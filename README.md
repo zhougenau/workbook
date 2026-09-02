@@ -9,6 +9,7 @@
 - 顶部可选择 Merriam-Webster、Cambridge、Bing 词典或爱词霸 iciba，默认使用 Merriam-Webster，选择会保存在当前设备
 - 已收录单词可一键打开所选在线词典，查看音标、词性、详细释义和更多例句
 - 登录后可勾选单词，由 DeepSeek V4 Flash 生成 5–10 道分级四选一复习题，即时评分、显示 Token 用量，并按答题证据联动掌握程度
+- 登录后可勾选单词生成包含全部目标词的英文短文和中文参考译文，并按选词数量自动推荐短、中、长篇幅
 - 0–5 级掌握度管理，默认值为 0
 - 搜索、掌握度筛选和多种排序方式
 - 编辑、删除、学习统计
@@ -128,6 +129,7 @@ npx supabase secrets set "DEEPSEEK_API_KEY=$plainKey"
 Remove-Variable secureKey, plainKey
 npx supabase functions deploy generate-review
 npx supabase functions deploy word-chat
+npx supabase functions deploy generate-passage
 ```
 
 函数控制台：[`generate-review`](https://supabase.com/dashboard/project/gvgztuwklhlhzorcoouh/functions)。部署时出现 `WARNING: Docker is not running` 可以忽略；Docker 只用于本地运行 Edge Function，不影响远程部署。若提示 `Entrypoint path does not exist`，说明命令不在 wordbook 项目根目录执行，请先运行上面的 `cd` 命令。
@@ -137,6 +139,8 @@ npx supabase functions deploy word-chat
 使用时先登录，在单词库点击“AI 复习”，可以逐个勾选单词，也可以点击“一键全选”选中整个词库，然后选择 5–10 道题及难度后生成。应用会先同步所选词条；为控制请求体积和 Token 成本，选择超过 20 个词时，每轮会从所选词池随机抽取 20 个交给 AI。未登录、未同步或不属于当前用户的词条不会被函数读取。
 
 每个词条还提供“AI 对话”按钮。对话框会绑定当前单词，可多轮询问释义、词源、搭配、例句、近义词区别和记忆方案。对话记录仅保留在当前弹窗中，不写入数据库；服务端最多接收最近 12 条消息，每条最多 1000 字，并会重新验证登录用户及词条归属。
+
+“AI 短文”会使用用户勾选的全部单词生成英文阅读材料和中文参考译文。选择 1–10 个单词时默认短篇（约 100–200 个英文词），11–20 个单词时默认中篇（约 200–300 个英文词），超过 20 个单词时默认长篇（约 500 个英文词）；用户可以在生成前手动切换长度。服务端最多接收 60 个单词，并会验证词条归属、正文长度以及每个目标词是否实际出现在短文中。
 
 答题页和结果页会显示本次 DeepSeek 调用的输入、输出及总 Token 数。若模型首次返回无效题目并触发自动重试，页面显示的是两次调用的累计用量；这里只显示 Token 数量，不包含 API Key 或其他敏感信息。
 

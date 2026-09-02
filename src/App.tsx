@@ -2,6 +2,7 @@ import { type ChangeEvent, type FormEvent, useEffect, useEffectEvent, useRef, us
 import type { User } from '@supabase/supabase-js'
 import {
   BookOpen,
+  BookText,
   BrainCircuit,
   Check,
   CheckSquare2,
@@ -39,6 +40,7 @@ import { isCloudConfigured, supabase } from './supabase'
 import { synchronize } from './sync'
 import { ReviewPanel } from './ReviewPanel'
 import type { MasteryChange } from './review'
+import { PassagePanel } from './PassagePanel'
 import { WordChatDialog } from './WordChatDialog'
 import './App.css'
 
@@ -166,6 +168,7 @@ function App() {
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const [dictionaryEngine, setDictionaryEngine] = useState<DictionaryEngine>(loadDictionaryEngine)
   const [reviewSelecting, setReviewSelecting] = useState(false)
+  const [passageSelecting, setPassageSelecting] = useState(false)
   const [selectedWordIds, setSelectedWordIds] = useState<string[]>([])
   const [quickReviewRequest, setQuickReviewRequest] = useState(0)
   const [chatWord, setChatWord] = useState<VocabularyEntry | null>(null)
@@ -185,8 +188,21 @@ function App() {
       setSyncMessage('AI 复习需要登录，以便服务端安全调用 DeepSeek。')
       return
     }
+    setPassageSelecting(false)
     setQuickReviewRequest(0)
     setReviewSelecting((active) => !active)
+    setSelectedWordIds([])
+  }
+
+  const togglePassageSelection = () => {
+    if (!user) {
+      setCloudOpen(true)
+      setSyncMessage('AI 短文需要登录，以便服务端安全调用 DeepSeek。')
+      return
+    }
+    setReviewSelecting(false)
+    setQuickReviewRequest(0)
+    setPassageSelecting((active) => !active)
     setSelectedWordIds([])
   }
 
@@ -203,6 +219,7 @@ function App() {
       })
       return
     }
+    setPassageSelecting(false)
     setSelectedWordIds([id])
     setReviewSelecting(true)
     setQuickReviewRequest((request) => request + 1)
@@ -340,16 +357,18 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!reviewSelecting) return
+    if (!reviewSelecting && !passageSelecting) return
     const quickReview = quickReviewRequest > 0
     if (!quickReview && !window.matchMedia('(max-width: 520px)').matches) return
     const frame = window.requestAnimationFrame(() => {
       const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      const target = quickReview ? document.getElementById('review-panel') : reviewWordList.current
+      const target = quickReview
+        ? document.getElementById('review-panel')
+        : passageSelecting ? document.getElementById('passage-panel') : reviewWordList.current
       target?.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' })
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [reviewSelecting, quickReviewRequest])
+  }, [reviewSelecting, passageSelecting, quickReviewRequest])
 
   const scheduleSync = (activeUser: User) => {
     if (syncTimer.current) window.clearTimeout(syncTimer.current)
@@ -479,6 +498,7 @@ function App() {
       setEntries([])
       setSelectedWordIds([])
       setReviewSelecting(false)
+      setPassageSelecting(false)
       editingIdRef.current = null
       setEditingId(null)
       if (user) scheduleSync(user)
@@ -623,6 +643,7 @@ function App() {
     setSyncState('local')
     setCloudOpen(false)
     setReviewSelecting(false)
+    setPassageSelecting(false)
     setSelectedWordIds([])
   }
 
@@ -652,6 +673,7 @@ function App() {
   const learningCount = entries.filter((entry) => entry.mastery > 0 && entry.mastery < 5).length
   const selectedWords = entries.filter((entry) => selectedWordIds.includes(entry.id))
   const allWordsSelected = entries.length > 0 && selectedWordIds.length === entries.length
+  const selectingWords = reviewSelecting || passageSelecting
 
   const showStatisticEntries = (filter: 'all' | 'learning' | '5') => {
     setSearch('')
@@ -814,6 +836,10 @@ function App() {
                 {reviewSelecting ? <X size={17} /> : <BrainCircuit size={17} />}
                 {reviewSelecting ? '取消复习' : 'AI 复习'}
               </button>
+              <button className={`passage-start-button ${passageSelecting ? 'active' : ''}`} type="button" onClick={togglePassageSelection} disabled={!entries.length}>
+                {passageSelecting ? <X size={17} /> : <BookText size={17} />}
+                {passageSelecting ? '取消短文' : 'AI 短文'}
+              </button>
             </div>
           </div>
 
@@ -842,7 +868,7 @@ function App() {
             </label>
           </div>
 
-          {reviewSelecting && (
+          {selectingWords && (
             <>
               <div className="review-selection-bar">
                 <span>已选择 <strong>{selectedWordIds.length}</strong> / {entries.length} 个单词</span>
@@ -851,18 +877,31 @@ function App() {
                   {allWordsSelected ? '清空选择' : '一键全选'}
                 </button>
               </div>
-              <ReviewPanel
-                key={quickReviewRequest ? `quick-${quickReviewRequest}` : 'manual'}
-                selectedWords={selectedWords}
-                prepareWords={prepareReviewWords}
-                applyMasteryChanges={applyReviewMasteryChanges}
-                autoStart={quickReviewRequest > 0}
-                onClose={() => {
-                  setReviewSelecting(false)
-                  setSelectedWordIds([])
-                  setQuickReviewRequest(0)
-                }}
-              />
+              {reviewSelecting && (
+                <ReviewPanel
+                  key={quickReviewRequest ? `quick-${quickReviewRequest}` : 'manual'}
+                  selectedWords={selectedWords}
+                  prepareWords={prepareReviewWords}
+                  applyMasteryChanges={applyReviewMasteryChanges}
+                  autoStart={quickReviewRequest > 0}
+                  onClose={() => {
+                    setReviewSelecting(false)
+                    setSelectedWordIds([])
+                    setQuickReviewRequest(0)
+                  }}
+                />
+              )}
+              {passageSelecting && (
+                <PassagePanel
+                  key={selectedWordIds.join(',')}
+                  selectedWords={selectedWords}
+                  prepareWords={prepareReviewWords}
+                  onClose={() => {
+                    setPassageSelecting(false)
+                    setSelectedWordIds([])
+                  }}
+                />
+              )}
             </>
           )}
 
@@ -875,11 +914,11 @@ function App() {
           ) : (
             <div className="word-list" ref={reviewWordList}>
               {visibleEntries.map((entry, index) => (
-                <article className={`word-card ${reviewSelecting ? 'review-word-card' : ''} ${selectedWordIds.includes(entry.id) ? 'selected-for-review' : ''}`} key={entry.id}>
-                  <div className={`word-index ${reviewSelecting ? 'review-select-index' : ''}`}>
-                    {reviewSelecting ? (
+                <article className={`word-card ${selectingWords ? 'review-word-card' : ''} ${selectedWordIds.includes(entry.id) ? 'selected-for-review' : ''}`} key={entry.id}>
+                  <div className={`word-index ${selectingWords ? 'review-select-index' : ''}`}>
+                    {selectingWords ? (
                       <label title={`选择 ${entry.term}`}>
-                        <input type="checkbox" checked={selectedWordIds.includes(entry.id)} onChange={() => toggleSelectedWord(entry.id)} aria-label={`选择 ${entry.term} 进行复习`} />
+                        <input type="checkbox" checked={selectedWordIds.includes(entry.id)} onChange={() => toggleSelectedWord(entry.id)} aria-label={`选择 ${entry.term} 进行${passageSelecting ? '短文生成' : '复习'}`} />
                         <span><Check size={15} /></span>
                       </label>
                     ) : String(index + 1).padStart(2, '0')}
@@ -896,10 +935,10 @@ function App() {
                         <time dateTime={entry.createdAt}>添加于 {formatDate(entry.createdAt)}</time>
                       </div>
                       <div className="card-actions">
-                        <button type="button" onClick={() => startSingleWordReview(entry.id)} disabled={reviewSelecting} title={`用 ${entry.term} 进行 AI 测试（5 题 · 基础）`} aria-label={`用 ${entry.term} 进行 AI 测试，5 题，基础难度`}>
+                        <button type="button" onClick={() => startSingleWordReview(entry.id)} disabled={selectingWords} title={`用 ${entry.term} 进行 AI 测试（5 题 · 基础）`} aria-label={`用 ${entry.term} 进行 AI 测试，5 题，基础难度`}>
                           <BrainCircuit size={17} />
                         </button>
-                        <button type="button" onClick={() => startWordChat(entry)} disabled={reviewSelecting} title={`与 AI 学习 ${entry.term}`} aria-label={`与 AI 对话学习 ${entry.term}`}>
+                        <button type="button" onClick={() => startWordChat(entry)} disabled={selectingWords} title={`与 AI 学习 ${entry.term}`} aria-label={`与 AI 对话学习 ${entry.term}`}>
                           <MessageCircle size={17} />
                         </button>
                         <a href={dictionaryEngines[dictionaryEngine].getUrl(entry.term)} target="_blank" rel="noreferrer" title={`使用 ${dictionaryEngines[dictionaryEngine].label} 查看 ${entry.term} 的详细解释`} aria-label={`使用 ${dictionaryEngines[dictionaryEngine].label} 查看 ${entry.term} 的详细解释`}>

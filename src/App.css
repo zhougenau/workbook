@@ -289,6 +289,9 @@
 .review-start-button { display: inline-flex; min-width: 112px; height: 42px; padding: 0 15px; align-items: center; justify-content: center; gap: 7px; color: var(--paper); font-weight: 700; background: var(--ink); border: 1px solid var(--ink); cursor: pointer; }
 .review-start-button:hover, .review-start-button.active { color: var(--ink); background: var(--lime); }
 .review-start-button:disabled { opacity: .35; cursor: not-allowed; }
+.passage-start-button { display: inline-flex; min-width: 112px; height: 42px; padding: 0 15px; align-items: center; justify-content: center; gap: 7px; color: var(--ink); font-weight: 700; background: var(--coral); border: 1px solid var(--ink); cursor: pointer; }
+.passage-start-button:hover, .passage-start-button.active { color: var(--paper); background: var(--coral-dark); }
+.passage-start-button:disabled { opacity: .35; cursor: not-allowed; }
 .toolbar { display: grid; grid-template-columns: 1fr auto auto; margin-bottom: 24px; border-block: 1px solid var(--ink); }
 .search-box { display: flex; height: 54px; padding: 0 16px; align-items: center; gap: 10px; border-right: 1px solid var(--ink); }
 .search-box input { min-width: 0; flex: 1; background: transparent; border: 0; outline: 0; }
@@ -315,6 +318,29 @@
 .generate-review-button { display: inline-flex; height: 44px; padding: 0 18px; align-items: center; justify-content: center; justify-self: end; gap: 8px; color: var(--ink); font-weight: 700; background: var(--lime); border: 1px solid var(--lime); cursor: pointer; }
 .generate-review-button:hover { background: var(--coral); border-color: var(--coral); }
 .generate-review-button:disabled { opacity: .4; cursor: not-allowed; }
+.passage-panel { border-left-color: var(--coral); }
+.passage-panel .review-kicker { color: var(--coral); }
+.passage-settings { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)) auto; gap: 10px; margin-top: 24px; align-items: stretch; }
+.passage-settings > button:not(.generate-review-button) { display: grid; min-height: 58px; padding: 8px 12px; align-content: center; gap: 3px; color: var(--paper); text-align: left; background: #24241f; border: 1px solid #5e5a54; cursor: pointer; }
+.passage-settings > button:not(.generate-review-button):hover, .passage-settings > button.active { color: var(--ink); background: var(--coral); border-color: var(--coral); }
+.passage-settings button strong { font-size: 13px; }
+.passage-settings button span { color: #aaa7a1; font-size: 10px; }
+.passage-settings > button.active span { color: #4a241d; }
+.passage-settings .generate-review-button { height: auto; min-height: 58px; }
+.passage-result { margin-top: 24px; color: var(--ink); background: var(--paper); border: 1px solid #5e5a54; }
+.passage-result-heading { display: flex; padding: 18px 20px; align-items: flex-start; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--ink); }
+.passage-result-heading span { color: var(--coral-dark); font: 700 10px/1 var(--mono); }
+.passage-result-heading h4 { margin: 6px 0 0; font-family: var(--display); font-size: 25px; letter-spacing: 0; }
+.passage-result-heading .review-token-usage { margin: 0; color: var(--muted); }
+.passage-result-heading .review-token-usage dd { color: var(--ink); }
+.passage-copy { margin: 0; padding: 24px 20px; white-space: pre-wrap; font-family: Georgia, serif; font-size: 16px; line-height: 1.85; }
+.passage-translation { padding: 18px 20px; background: #fff; border-block: 1px solid var(--line); }
+.passage-translation > strong { color: var(--coral-dark); font-size: 12px; }
+.passage-translation p { margin: 8px 0 0; white-space: pre-wrap; color: var(--muted); font-size: 14px; line-height: 1.75; }
+.passage-used-words { display: grid; padding: 16px 20px; gap: 10px; }
+.passage-used-words > span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; }
+.passage-used-words > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.passage-used-words b { padding: 5px 8px; font: 700 10px/1 var(--mono); background: var(--lime); border: 1px solid var(--ink); }
 .review-hint, .review-error { margin: 14px 0 0; font-size: 12px; }
 .review-hint { color: #aaa7a1; }
 .review-error { padding: 10px 12px; color: #ffd8cb; background: #5f2116; border: 1px solid var(--coral); }
@@ -465,7 +491,11 @@
   .primary-button { margin-top: 6px; }
   .toast { position: static; width: 100%; margin-top: 18px; justify-content: space-between; }
   .library { padding: 56px 0 80px; }
+  .library-heading { flex-wrap: wrap; }
+  .library-heading > .library-actions { width: 100%; }
   .review-settings { grid-template-columns: 1fr 1fr; }
+  .passage-settings { grid-template-columns: repeat(3, 1fr); }
+  .passage-settings .generate-review-button { grid-column: 1 / -1; }
   .generate-review-button { grid-column: 1 / -1; width: 100%; justify-self: stretch; }
   .review-options { grid-template-columns: 1fr; }
   .toolbar { grid-template-columns: 1fr 1fr; }
@@ -489,14 +519,17 @@
   .dictionary-engine { position: absolute; left: 15px; right: 15px; bottom: 8px; grid-template-columns: auto 1fr; column-gap: 10px; align-items: center; }
   .dictionary-engine span { font-size: 10px; }
   .dictionary-engine select { width: 100%; text-align: right; }
-  .library-heading { flex-wrap: wrap; }
-  .library-actions { width: 100%; }
-  .clear-all-button, .reset-mastery-button, .review-start-button { flex: 1; }
+  .library-actions { display: grid !important; grid-template-columns: 1fr 1fr; width: 100%; }
+  .clear-all-button, .reset-mastery-button, .review-start-button, .passage-start-button { width: 100%; min-width: 0; }
   .review-selection-bar { position: sticky; top: 106px; z-index: 4; padding: 8px 10px; align-items: stretch; flex-direction: column; gap: 7px; box-shadow: 0 4px 0 color-mix(in srgb, var(--ink) 12%, transparent); }
   .review-selection-bar button { width: 100%; justify-content: center; }
   .word-list { scroll-margin-top: 196px; }
   .review-panel { padding: 22px 18px; scroll-margin-top: 196px; }
   .review-settings { grid-template-columns: 1fr; }
+  .passage-settings { grid-template-columns: 1fr; }
+  .passage-settings .generate-review-button { grid-column: auto; }
+  .passage-result-heading { align-items: stretch; flex-direction: column; }
+  .passage-result-heading .review-token-usage { flex-wrap: wrap; }
   .generate-review-button { grid-column: auto; }
   .review-result-actions, .review-question-actions { align-items: stretch; flex-direction: column; }
   .review-result-actions button, .review-question-actions button { width: 100%; }

@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.word-chat]
 verify_jwt = false
+
+[functions.generate-passage]
+verify_jwt = false
