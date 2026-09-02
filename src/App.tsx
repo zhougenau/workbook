@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react'
 import {
+  deleteEntries as deleteStoredEntries,
   deleteEntry as deleteStoredEntry,
   initializeStorage,
   loadEntries,
@@ -359,6 +360,23 @@ function App() {
     if (user) scheduleSync(user)
   }
 
+  const clearAllEntries = async () => {
+    const entryCount = entries.length
+    if (!entryCount || !window.confirm(`确定清空全部 ${entryCount} 个词条吗？\n\n此操作无法撤销，建议先导出备份。`)) return
+
+    try {
+      await deleteStoredEntries(entries.map((entry) => entry.id), user?.id ?? null)
+      setEntries([])
+      setSelectedWordIds([])
+      setReviewSelecting(false)
+      setEditingId(null)
+      if (user) scheduleSync(user)
+      setMessage(`已清空 ${entryCount} 个单词`)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '清空词库失败')
+    }
+  }
+
   const exportEntries = () => {
     const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -632,10 +650,15 @@ function App() {
           <div className="section-heading library-heading">
             <span className="section-number">02</span>
             <div><h2 id="library-title">我的单词本</h2><p>{visibleEntries.length} 个词条</p></div>
-            <button className={`review-start-button ${reviewSelecting ? 'active' : ''}`} type="button" onClick={toggleReviewSelection} disabled={!entries.length}>
-              {reviewSelecting ? <X size={17} /> : <BrainCircuit size={17} />}
-              {reviewSelecting ? '取消复习' : 'AI 复习'}
-            </button>
+            <div className="library-actions">
+              <button className="clear-all-button" type="button" onClick={() => void clearAllEntries()} disabled={!entries.length}>
+                <Trash2 size={17} />清空
+              </button>
+              <button className={`review-start-button ${reviewSelecting ? 'active' : ''}`} type="button" onClick={toggleReviewSelection} disabled={!entries.length}>
+                {reviewSelecting ? <X size={17} /> : <BrainCircuit size={17} />}
+                {reviewSelecting ? '取消复习' : 'AI 复习'}
+              </button>
+            </div>
           </div>
 
           <div className="toolbar">

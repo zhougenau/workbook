@@ -114,6 +114,29 @@ export async function deleteEntry(id: string, ownerId: string | null) {
   })
 }
 
+export async function deleteEntries(ids: string[], ownerId: string | null) {
+  if (!ids.length) return
+
+  await db.transaction('rw', db.entries, async () => {
+    if (!ownerId) {
+      await db.entries.bulkDelete(ids)
+      return
+    }
+
+    const now = new Date().toISOString()
+    const existing = (await db.entries.bulkGet(ids)).filter(
+      (entry): entry is VocabularyEntry => Boolean(entry),
+    )
+    await db.entries.bulkPut(existing.map((entry) => ({
+      ...entry,
+      ownerId,
+      deletedAt: now,
+      updatedAt: now,
+      syncStatus: 'pending',
+    })))
+  })
+}
+
 export async function replaceEntries(entries: VocabularyEntry[]) {
   await db.transaction('rw', db.entries, async () => {
     await db.entries.clear()
