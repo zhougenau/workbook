@@ -161,6 +161,7 @@ function App() {
   const [masteryFilter, setMasteryFilter] = useState('all')
   const [sort, setSort] = useState('newest')
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState({ meaning: '', note: '' })
   const [message, setMessage] = useState('')
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const [dictionaryEngine, setDictionaryEngine] = useState<DictionaryEngine>(loadDictionaryEngine)
@@ -169,6 +170,8 @@ function App() {
   const [quickReviewRequest, setQuickReviewRequest] = useState(0)
   const [chatWord, setChatWord] = useState<VocabularyEntry | null>(null)
   const syncTimer = useRef<number | null>(null)
+  const editingIdRef = useRef<string | null>(null)
+  const syncPendingAfterEdit = useRef(false)
   const reviewWordList = useRef<HTMLDivElement | null>(null)
 
   const changeDictionaryEngine = (engine: DictionaryEngine) => {
@@ -265,6 +268,12 @@ function App() {
   }
 
   const performSync = async (activeUser: User) => {
+    if (editingIdRef.current) {
+      syncPendingAfterEdit.current = true
+      setSyncState('local')
+      setSyncMessage('正在编辑词条，完成后将自动同步。')
+      return
+    }
     if (!navigator.onLine) {
       setSyncState('error')
       setSyncMessage('同步失败 · 网络连接\n原因：浏览器当前处于离线状态\n调试方向：恢复网络后点击“立即同步”重试。\n本地词条不会因同步失败而丢失。')
@@ -344,6 +353,11 @@ function App() {
 
   const scheduleSync = (activeUser: User) => {
     if (syncTimer.current) window.clearTimeout(syncTimer.current)
+    if (editingIdRef.current) {
+      syncPendingAfterEdit.current = true
+      return
+    }
+    syncPendingAfterEdit.current = false
     syncTimer.current = window.setTimeout(() => void performSync(activeUser), 800)
   }
 
@@ -417,10 +431,41 @@ function App() {
     if (user) scheduleSync(user)
   }
 
+  const toggleEditing = (entry: VocabularyEntry) => {
+    if (editingId === entry.id) {
+      editingIdRef.current = null
+      setEditingId(null)
+      setSyncMessage('')
+      setSyncState(user ? 'synced' : 'local')
+      if (user && syncPendingAfterEdit.current) scheduleSync(user)
+      return
+    }
+    if (syncTimer.current) {
+      window.clearTimeout(syncTimer.current)
+      syncTimer.current = null
+      syncPendingAfterEdit.current = true
+    }
+    setEditDraft({ meaning: entry.meaning, note: entry.note })
+    editingIdRef.current = entry.id
+    setEditingId(entry.id)
+    setSyncState(user ? 'local' : syncState)
+    setSyncMessage(user ? '正在编辑词条，完成后将自动同步。' : '')
+  }
+
+  const finishEditing = async (id: string) => {
+    const draft = { meaning: editDraft.meaning.trim(), note: editDraft.note.trim() }
+    await updateEntry(id, draft)
+    editingIdRef.current = null
+    setEditingId(null)
+    setSyncMessage('')
+    if (user) scheduleSync(user)
+  }
+
   const deleteEntry = async (entry: VocabularyEntry) => {
     if (!window.confirm(`确定删除 “${entry.term}” 吗？`)) return
     await deleteStoredEntry(entry.id, user?.id ?? null)
     setEntries(entries.filter((item) => item.id !== entry.id))
+    editingIdRef.current = null
     setEditingId(null)
     if (user) scheduleSync(user)
   }
@@ -434,6 +479,7 @@ function App() {
       setEntries([])
       setSelectedWordIds([])
       setReviewSelecting(false)
+      editingIdRef.current = null
       setEditingId(null)
       if (user) scheduleSync(user)
       setMessage(`已清空 ${entryCount} 个单词`)
@@ -859,15 +905,15 @@ function App() {
                         <a href={dictionaryEngines[dictionaryEngine].getUrl(entry.term)} target="_blank" rel="noreferrer" title={`使用 ${dictionaryEngines[dictionaryEngine].label} 查看 ${entry.term} 的详细解释`} aria-label={`使用 ${dictionaryEngines[dictionaryEngine].label} 查看 ${entry.term} 的详细解释`}>
                           <ExternalLink size={17} />
                         </a>
-                        <button type="button" onClick={() => setEditingId(editingId === entry.id ? null : entry.id)} title="编辑"><Edit3 size={17} /></button>
+                        <button type="button" onClick={() => toggleEditing(entry)} title={editingId === entry.id ? '取消编辑' : '编辑'}><Edit3 size={17} /></button>
                         <button type="button" onClick={() => deleteEntry(entry)} title="删除"><Trash2 size={17} /></button>
                       </div>
                     </div>
                     {editingId === entry.id ? (
                       <div className="edit-fields">
-                        <input value={entry.meaning} onChange={(event) => updateEntry(entry.id, { meaning: event.target.value })} placeholder="补充释义" aria-label={`${entry.term} 的释义`} />
-                        <input value={entry.note} onChange={(event) => updateEntry(entry.id, { note: event.target.value })} placeholder="补充笔记或例句" aria-label={`${entry.term} 的笔记`} />
-                        <button type="button" onClick={() => setEditingId(null)}><Check size={16} />完成</button>
+                        <input value={editDraft.meaning} onChange={(event) => setEditDraft((draft) => ({ ...draft, meaning: event.target.value }))} placeholder="补充释义" aria-label={`${entry.term} 的释义`} />
+                        <input value={editDraft.note} onChange={(event) => setEditDraft((draft) => ({ ...draft, note: event.target.value }))} placeholder="补充笔记或例句" aria-label={`${entry.term} 的笔记`} />
+                        <button type="button" onClick={() => void finishEditing(entry.id)}><Check size={16} />完成</button>
                       </div>
                     ) : (
                       <div className="definition">
