@@ -5,7 +5,7 @@ import type { VocabularyEntry } from './storage'
 
 type ReviewPanelProps = {
   selectedWords: VocabularyEntry[]
-  prepareWords: () => Promise<void>
+  prepareWords: () => Promise<Record<string, string>>
   applyMasteryChanges: (changes: MasteryChange[]) => Promise<void>
   onClose: () => void
 }
@@ -44,9 +44,9 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
     setLoading(true)
     setError('')
     try {
-      await prepareWords()
+      const idRemap = await prepareWords()
       const wordIds = reviewWordIds ?? selectedWords
-        .map((word) => word.id)
+        .map((word) => idRemap[word.id] ?? word.id)
         .sort(() => Math.random() - 0.5)
         .slice(0, 20)
       const result = await generateReview(wordIds, questionCount, difficulty)

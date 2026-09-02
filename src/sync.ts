@@ -16,6 +16,22 @@ type CloudEntry = {
   deleted_at: string | null
 }
 
+export type SyncResult = {
+  idRemap: Record<string, string>
+  repairedCount: number
+}
+
+type PostgrestErrorLike = {
+  code?: unknown
+  message?: unknown
+}
+
+function isOwnershipCollision(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+  const details = error as PostgrestErrorLike
+  return String(details.code) === '42501' && /USING expression/i.test(String(details.message))
+}
+
 function fromCloud(row: CloudEntry): VocabularyEntry {
   return {
     id: row.id,
@@ -46,7 +62,7 @@ function toCloud(entry: VocabularyEntry, userId: string): CloudEntry {
   }
 }
 
-export async function synchronize(user: User) {
+export async function synchronize(user: User): Promise<SyncResult> {
   if (!supabase) throw new Error('尚未配置 Supabase')
   try {
     await getAccessToken()
@@ -82,12 +98,52 @@ export async function synchronize(user: User) {
     if (!local || remote.updatedAt > local.updatedAt) merged.set(remote.id, remote)
   }
 
-  const mergedEntries = [...merged.values()]
-  const toUpload = mergedEntries.filter((entry) => entry.syncStatus !== 'synced')
+  let mergedEntries = [...merged.values()]
+  let toUpload = mergedEntries.filter((entry) => entry.syncStatus !== 'synced')
+  const idRemap: Record<string, string> = {}
   if (toUpload.length) {
-    const { error: pushError } = await supabase
+    let { error: pushError } = await supabase
       .from('vocabulary_entries')
       .upsert(toUpload.map((entry) => toCloud(entry, user.id)), { onConflict: 'id' })
+
+    if (pushError && isOwnershipCollision(pushError)) {
+      const remoteIds = new Set((data ?? []).map((row) => (row as CloudEntry).id))
+      const collisionCandidates = toUpload.filter((entry) => !remoteIds.has(entry.id))
+      const candidateIds = new Set(collisionCandidates.map((entry) => entry.id))
+      const repairedAt = new Date().toISOString()
+      const repairedEntries = collisionCandidates
+        .filter((entry) => !entry.deletedAt)
+        .map((entry) => {
+          const repairedId = crypto.randomUUID()
+          idRemap[entry.id] = repairedId
+          return { ...entry, id: repairedId, updatedAt: repairedAt }
+        })
+
+      if (collisionCandidates.length) {
+        try {
+          await db.transaction('rw', db.entries, async () => {
+            await db.entries.bulkDelete([...candidateIds])
+            await db.entries.bulkPut(repairedEntries)
+          })
+        } catch (error) {
+          throw createSyncError('保存同步结果', error)
+        }
+
+        mergedEntries = [
+          ...mergedEntries.filter((entry) => !candidateIds.has(entry.id)),
+          ...repairedEntries,
+        ]
+        toUpload = [
+          ...toUpload.filter((entry) => remoteIds.has(entry.id)),
+          ...repairedEntries,
+        ]
+        const retry = await supabase
+          .from('vocabulary_entries')
+          .upsert(toUpload.map((entry) => toCloud(entry, user.id)), { onConflict: 'id' })
+        pushError = retry.error
+      }
+    }
+
     if (pushError) throw createSyncError('上传本地词条', pushError, toUpload.length)
   }
 
@@ -98,4 +154,6 @@ export async function synchronize(user: User) {
   } catch (error) {
     throw createSyncError('保存同步结果', error)
   }
+
+  return { idRemap, repairedCount: Object.keys(idRemap).length }
 }

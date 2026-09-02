@@ -193,9 +193,11 @@ function App() {
 
   const prepareReviewWords = async () => {
     if (!user) throw new Error('请先登录后再生成复习题')
-    await synchronize(user)
+    const result = await synchronize(user)
     setEntries(await loadEntries(user.id))
+    setSelectedWordIds((selected) => selected.map((id) => result.idRemap[id] ?? id))
     setSyncState('synced')
+    return result.idRemap
   }
 
   const applyReviewMasteryChanges = async (changes: MasteryChange[]) => {
@@ -223,9 +225,13 @@ function App() {
     setSyncState('syncing')
     setSyncMessage('')
     try {
-      await synchronize(activeUser)
+      const result = await synchronize(activeUser)
       setEntries(await loadEntries(activeUser.id))
+      setSelectedWordIds((selected) => selected.map((id) => result.idRemap[id] ?? id))
       setSyncState('synced')
+      setSyncMessage(result.repairedCount
+        ? `已修复 ${result.repairedCount} 条旧版跨账号导入记录，并完成云端同步。`
+        : '')
     } catch (error) {
       setSyncState('error')
       setSyncMessage(error instanceof Error ? error.message : '同步失败')
@@ -411,16 +417,15 @@ function App() {
         }
         existingTerms.add(normalizedTerm)
 
-        const isCrossAccountImport = entry.ownerId !== targetOwnerId
         const importedAt = new Date().toISOString()
         return [{
-          id: isCrossAccountImport ? crypto.randomUUID() : entry.id,
+          id: crypto.randomUUID(),
           term: entry.term.trim(),
           meaning: entry.meaning,
           note: entry.note,
           mastery: entry.mastery,
-          createdAt: isCrossAccountImport ? importedAt : entry.createdAt,
-          updatedAt: isCrossAccountImport ? importedAt : entry.updatedAt,
+          createdAt: importedAt,
+          updatedAt: importedAt,
           ownerId: targetOwnerId,
           deletedAt: null,
           syncStatus: user ? 'pending' as const : 'local' as const,
