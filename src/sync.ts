@@ -1,6 +1,6 @@
 import type { User } from '@supabase/supabase-js'
 import { db, type VocabularyEntry } from './storage'
-import { supabase } from './supabase'
+import { getAccessToken, supabase } from './supabase'
 
 type CloudEntry = {
   id: string
@@ -47,6 +47,7 @@ function toCloud(entry: VocabularyEntry, userId: string): CloudEntry {
 
 export async function synchronize(user: User) {
   if (!supabase) throw new Error('尚未配置 Supabase')
+  await getAccessToken()
 
   const allLocal = await db.entries.toArray()
   const ownedLocal = allLocal

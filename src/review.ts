@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { getAccessToken, supabase } from './supabase'
 import type { VocabularyEntry } from './storage'
 
 export type ReviewDifficulty = 'basic' | 'intermediate' | 'advanced'
@@ -144,9 +144,11 @@ export async function generateReview(
   difficulty: ReviewDifficulty,
 ) {
   if (!supabase) throw new Error('尚未配置 Supabase')
+  const accessToken = await getAccessToken()
 
   const { data, error } = await supabase.functions.invoke('generate-review', {
     body: { wordIds, questionCount, difficulty },
+    headers: { Authorization: `Bearer ${accessToken}` },
   })
   if (error) throw new Error(await getFunctionErrorMessage(error))
   return parseReviewQuiz(data, questionCount)

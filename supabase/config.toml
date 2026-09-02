@@ -1,0 +1,4 @@
+project_id = "wordbook"
+
+[functions.generate-review]
+verify_jwt = false
