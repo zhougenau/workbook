@@ -16,6 +16,7 @@ import {
   LogOut,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   Sparkles,
   Trash2,
@@ -389,6 +390,28 @@ function App() {
     }
   }
 
+  const resetAllMastery = async () => {
+    const affectedCount = entries.filter((entry) => entry.mastery !== 0).length
+    if (!affectedCount || !window.confirm(`确定将 ${affectedCount} 个单词的熟悉程度恢复为 0 吗？\n\n此操作不会删除任何单词。`)) return
+
+    const now = new Date().toISOString()
+    const nextEntries = entries.map((entry) => entry.mastery === 0 ? entry : {
+      ...entry,
+      mastery: 0,
+      updatedAt: now,
+      syncStatus: user ? 'pending' as const : 'local' as const,
+    })
+
+    try {
+      await updateEntries(nextEntries)
+      setSearch('')
+      setMasteryFilter('0')
+      setMessage(`已将 ${affectedCount} 个单词的熟悉程度恢复为 0`)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '重置熟悉程度失败')
+    }
+  }
+
   const exportEntries = () => {
     const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -685,6 +708,9 @@ function App() {
             <div className="library-actions">
               <button className="clear-all-button" type="button" onClick={() => void clearAllEntries()} disabled={!entries.length}>
                 <Trash2 size={17} />清空
+              </button>
+              <button className="reset-mastery-button" type="button" onClick={() => void resetAllMastery()} disabled={!entries.some((entry) => entry.mastery !== 0)}>
+                <RotateCcw size={17} />重置熟悉度
               </button>
               <button className={`review-start-button ${reviewSelecting ? 'active' : ''}`} type="button" onClick={toggleReviewSelection} disabled={!entries.length}>
                 {reviewSelecting ? <X size={17} /> : <BrainCircuit size={17} />}

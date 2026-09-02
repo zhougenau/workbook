@@ -283,6 +283,9 @@
 .clear-all-button { display: inline-flex; height: 42px; padding: 0 14px; align-items: center; justify-content: center; gap: 7px; color: var(--coral-dark); font-weight: 700; background: transparent; border: 1px solid var(--coral-dark); cursor: pointer; }
 .clear-all-button:hover { color: var(--paper); background: var(--coral-dark); }
 .clear-all-button:disabled { opacity: .35; cursor: not-allowed; }
+.reset-mastery-button { display: inline-flex; height: 42px; padding: 0 14px; align-items: center; justify-content: center; gap: 7px; color: var(--ink); font-weight: 700; background: transparent; border: 1px solid var(--ink); cursor: pointer; }
+.reset-mastery-button:hover { background: var(--lime); }
+.reset-mastery-button:disabled { opacity: .35; cursor: not-allowed; }
 .review-start-button { display: inline-flex; min-width: 112px; height: 42px; padding: 0 15px; align-items: center; justify-content: center; gap: 7px; color: var(--paper); font-weight: 700; background: var(--ink); border: 1px solid var(--ink); cursor: pointer; }
 .review-start-button:hover, .review-start-button.active { color: var(--ink); background: var(--lime); }
 .review-start-button:disabled { opacity: .35; cursor: not-allowed; }
@@ -457,7 +460,7 @@
   .dictionary-engine select { width: 100%; text-align: right; }
   .library-heading { flex-wrap: wrap; }
   .library-actions { width: 100%; }
-  .clear-all-button, .review-start-button { flex: 1; }
+  .clear-all-button, .reset-mastery-button, .review-start-button { flex: 1; }
   .review-selection-bar { position: sticky; top: 106px; z-index: 4; padding: 8px 10px; align-items: stretch; flex-direction: column; gap: 7px; box-shadow: 0 4px 0 color-mix(in srgb, var(--ink) 12%, transparent); }
   .review-selection-bar button { width: 100%; justify-content: center; }
   .word-list { scroll-margin-top: 196px; }
