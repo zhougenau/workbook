@@ -238,13 +238,16 @@
 .eyebrow { margin: 0 0 18px; color: var(--coral-dark); font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 0; }
 .app-shell h1 { max-width: 800px; margin: 0; font-family: var(--display); font-size: clamp(48px, 7vw, 88px); font-weight: 800; line-height: .98; letter-spacing: 0; }
 .stats { display: grid; grid-template-columns: repeat(3, 106px); border: 1px solid var(--ink); }
-.stats div { display: flex; flex-direction: column; min-height: 102px; padding: 18px; justify-content: space-between; border-right: 1px solid var(--ink); }
-.stats div:last-child { border-right: 0; }
+.stats button { display: flex; flex-direction: column; min-height: 102px; padding: 18px; justify-content: space-between; text-align: left; background: transparent; border: 0; border-right: 1px solid var(--ink); cursor: pointer; }
+.stats button:last-child { border-right: 0; }
+.stats button:hover, .stats button.active { background: var(--lime); }
+.app-shell .stats button:focus-visible { position: relative; z-index: 1; outline: 3px solid var(--coral-dark); outline-offset: -3px; }
 .stats strong { color: var(--coral-dark); font-family: var(--display); font-size: 34px; }
 .stats span { color: var(--muted); font-size: 12px; }
 .capture-panel { position: relative; padding: 36px; overflow: hidden; color: var(--paper); background: var(--ink); }
 .capture-panel::after { position: absolute; right: -36px; bottom: -64px; width: 220px; height: 150px; content: ''; border: 24px solid var(--coral); transform: rotate(-14deg); pointer-events: none; }
 .section-heading { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 30px; }
+#library-title { scroll-margin-top: 90px; }
 .section-number { padding-top: 5px; color: var(--coral); font-family: var(--mono); font-size: 12px; }
 .app-shell .section-heading h2 { margin: 0 0 4px; font-family: var(--display); font-size: 28px; font-weight: 800; line-height: 1.1; letter-spacing: 0; }
 .section-heading p { margin: 0; color: #aaa7a1; font-size: 14px; }
@@ -415,7 +418,7 @@
   .intro { grid-template-columns: 1fr; gap: 34px; padding: 56px 0 44px; }
   .app-shell h1 { font-size: clamp(43px, 13vw, 68px); }
   .stats { grid-template-columns: repeat(3, 1fr); }
-  .stats div { min-height: 80px; padding: 14px; }
+  .stats button { min-height: 80px; padding: 14px; }
   .stats strong { font-size: 28px; }
   .capture-panel { padding: 28px 22px; }
   .capture-panel::after { display: none; }
@@ -448,6 +451,7 @@
 
 @media (max-width: 520px) {
   .topbar { height: 106px; padding-bottom: 46px; }
+  #library-title { scroll-margin-top: 122px; }
   .dictionary-engine { position: absolute; left: 15px; right: 15px; bottom: 8px; grid-template-columns: auto 1fr; column-gap: 10px; align-items: center; }
   .dictionary-engine span { font-size: 10px; }
   .dictionary-engine select { width: 100%; text-align: right; }
@@ -474,7 +478,7 @@
   .sync-button { width: 38px; padding: 0; justify-content: center; }
   .cloud-actions, .login-form { flex-direction: column; }
   .login-form input, .cloud-actions button, .login-form button { width: 100%; }
-  .stats div { padding: 11px; }
+  .stats button { padding: 11px; }
   .stats span { font-size: 11px; }
   .word-card { grid-template-columns: 1fr; }
   .word-index { display: none; }

@@ -514,7 +514,10 @@ function App() {
           value.toLocaleLowerCase().includes(normalizedSearch),
         )
       const matchesMastery =
-        masteryFilter === 'all' || entry.mastery === Number(masteryFilter)
+        masteryFilter === 'all' ||
+        (masteryFilter === 'learning'
+          ? entry.mastery > 0 && entry.mastery < 5
+          : entry.mastery === Number(masteryFilter))
       return matchesText && matchesMastery
     })
     .sort((left, right) => {
@@ -528,6 +531,18 @@ function App() {
   const learningCount = entries.filter((entry) => entry.mastery > 0 && entry.mastery < 5).length
   const selectedWords = entries.filter((entry) => selectedWordIds.includes(entry.id))
   const allWordsSelected = entries.length > 0 && selectedWordIds.length === entries.length
+
+  const showStatisticEntries = (filter: 'all' | 'learning' | '5') => {
+    setSearch('')
+    setMasteryFilter(filter)
+    window.requestAnimationFrame(() => {
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      document.getElementById('library-title')?.scrollIntoView({
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+        block: 'start',
+      })
+    })
+  }
 
   return (
     <div className="app-shell">
@@ -612,9 +627,15 @@ function App() {
             <h1>把遇见的词，<br />变成自己的语言。</h1>
           </div>
           <div className="stats" aria-label="学习统计">
-            <div><strong>{entries.length}</strong><span>全部单词</span></div>
-            <div><strong>{learningCount}</strong><span>学习中</span></div>
-            <div><strong>{masteredCount}</strong><span>已掌握</span></div>
+            <button type="button" className={masteryFilter === 'all' ? 'active' : ''} aria-pressed={masteryFilter === 'all'} aria-controls="vocabulary-results" onClick={() => showStatisticEntries('all')}>
+              <strong>{entries.length}</strong><span>全部单词</span>
+            </button>
+            <button type="button" className={masteryFilter === 'learning' ? 'active' : ''} aria-pressed={masteryFilter === 'learning'} aria-controls="vocabulary-results" onClick={() => showStatisticEntries('learning')}>
+              <strong>{learningCount}</strong><span>学习中</span>
+            </button>
+            <button type="button" className={masteryFilter === '5' ? 'active' : ''} aria-pressed={masteryFilter === '5'} aria-controls="vocabulary-results" onClick={() => showStatisticEntries('5')}>
+              <strong>{masteredCount}</strong><span>已掌握</span>
+            </button>
           </div>
         </section>
 
@@ -657,10 +678,10 @@ function App() {
           {message && <button className="toast" type="button" onClick={() => setMessage('')}><Check size={16} />{message}<X size={14} /></button>}
         </section>
 
-        <section className="library" aria-labelledby="library-title">
+        <section id="vocabulary-results" className="library" aria-labelledby="library-title">
           <div className="section-heading library-heading">
             <span className="section-number">02</span>
-            <div><h2 id="library-title">我的单词本</h2><p>{visibleEntries.length} 个词条</p></div>
+            <div><h2 id="library-title">我的单词本</h2><p role="status" aria-live="polite">{visibleEntries.length} 个词条</p></div>
             <div className="library-actions">
               <button className="clear-all-button" type="button" onClick={() => void clearAllEntries()} disabled={!entries.length}>
                 <Trash2 size={17} />清空
@@ -681,6 +702,7 @@ function App() {
             <label className="select-wrap">
               <select value={masteryFilter} onChange={(event) => setMasteryFilter(event.target.value)} aria-label="按掌握度筛选">
                 <option value="all">全部程度</option>
+                <option value="learning">学习中 · 1–4</option>
                 {masteryLabels.map((label, index) => <option key={label} value={index}>{index} · {label}</option>)}
               </select>
               <ChevronDown size={16} />
