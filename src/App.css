@@ -361,7 +361,8 @@
 .word-card:hover { background: color-mix(in srgb, var(--lime) 18%, transparent); }
 .word-card.selected-for-review { background: color-mix(in srgb, var(--lime) 30%, transparent); }
 .word-index { padding-top: 7px; color: var(--muted); font-family: var(--mono); font-size: 11px; }
-.review-select-index label { display: block; cursor: pointer; }
+.review-select-index { width: 34px; min-width: 34px; }
+.review-select-index label { display: block; width: 28px; height: 28px; cursor: pointer; }
 .review-select-index input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .review-select-index span { display: grid; width: 28px; height: 28px; place-items: center; color: transparent; border: 1px solid var(--ink); }
 .review-select-index input:checked + span { color: var(--ink); background: var(--lime); }
@@ -430,6 +431,7 @@
   .search-box { grid-column: 1 / -1; border-right: 0; border-bottom: 1px solid var(--ink); }
   .select-wrap { min-width: 0; }
   .word-card { grid-template-columns: 34px 1fr; }
+  .review-select-index { align-self: start; }
   .word-title-row { gap: 12px; }
   .card-actions { flex-wrap: wrap; justify-content: flex-end; }
   .word-title-row h3 { font-size: 27px; }
@@ -447,8 +449,9 @@
   .dictionary-engine select { width: 100%; text-align: right; }
   .library-heading { flex-wrap: wrap; }
   .review-start-button { width: 100%; }
-  .review-selection-bar { padding: 8px 10px; align-items: stretch; flex-direction: column; gap: 7px; }
+  .review-selection-bar { position: sticky; top: 106px; z-index: 4; padding: 8px 10px; align-items: stretch; flex-direction: column; gap: 7px; box-shadow: 0 4px 0 color-mix(in srgb, var(--ink) 12%, transparent); }
   .review-selection-bar button { width: 100%; justify-content: center; }
+  .word-list { scroll-margin-top: 196px; }
   .review-panel { padding: 22px 18px; }
   .review-settings { grid-template-columns: 1fr; }
   .generate-review-button { grid-column: auto; }
@@ -470,6 +473,8 @@
   .stats span { font-size: 11px; }
   .word-card { grid-template-columns: 1fr; }
   .word-index { display: none; }
+  .word-card.review-word-card { grid-template-columns: 34px minmax(0, 1fr); }
+  .review-word-card .review-select-index { display: block; }
   .app-shell footer { flex-direction: column; gap: 6px; }
 }
 

@@ -159,6 +159,7 @@ function App() {
   const [reviewSelecting, setReviewSelecting] = useState(false)
   const [selectedWordIds, setSelectedWordIds] = useState<string[]>([])
   const syncTimer = useRef<number | null>(null)
+  const reviewWordList = useRef<HTMLDivElement | null>(null)
 
   const changeDictionaryEngine = (engine: DictionaryEngine) => {
     setDictionaryEngine(engine)
@@ -262,6 +263,14 @@ function App() {
     const timer = window.setInterval(() => setCurrentTime(new Date()), 1000)
     return () => window.clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    if (!reviewSelecting || !window.matchMedia('(max-width: 520px)').matches) return
+    const frame = window.requestAnimationFrame(() => {
+      reviewWordList.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [reviewSelecting])
 
   const scheduleSync = (activeUser: User) => {
     if (syncTimer.current) window.clearTimeout(syncTimer.current)
@@ -656,9 +665,9 @@ function App() {
               <p>{entries.length ? '换个关键词或筛选条件试试。' : '在上方记下今天遇到的第一个新词。'}</p>
             </div>
           ) : (
-            <div className="word-list">
+            <div className="word-list" ref={reviewWordList}>
               {visibleEntries.map((entry, index) => (
-                <article className={`word-card ${selectedWordIds.includes(entry.id) ? 'selected-for-review' : ''}`} key={entry.id}>
+                <article className={`word-card ${reviewSelecting ? 'review-word-card' : ''} ${selectedWordIds.includes(entry.id) ? 'selected-for-review' : ''}`} key={entry.id}>
                   <div className={`word-index ${reviewSelecting ? 'review-select-index' : ''}`}>
                     {reviewSelecting ? (
                       <label title={`选择 ${entry.term}`}>

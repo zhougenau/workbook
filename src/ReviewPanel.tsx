@@ -113,23 +113,30 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
     .filter((question, index) => answers[index] !== question.correctIndex)
     .map((question) => question.wordId))]
 
-  const finishReview = () => {
-    if (!masteryApplied) setMasteryChanges(calculateMasteryChanges(quiz, answers, selectedWords, difficulty))
-    setCompleted(true)
-  }
-
-  const confirmMasteryChanges = async () => {
-    if (masteryApplied || applyingMastery || !changedMastery.length) return
+  const saveMasteryChanges = async (changes: MasteryChange[]) => {
+    if (masteryApplied || applyingMastery || !changes.length) return
     setApplyingMastery(true)
     setError('')
     try {
-      await applyMasteryChanges(changedMastery)
+      await applyMasteryChanges(changes)
       setMasteryApplied(true)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '掌握程度保存失败')
     } finally {
       setApplyingMastery(false)
     }
+  }
+
+  const finishReview = () => {
+    if (masteryApplied) {
+      setCompleted(true)
+      return
+    }
+    const changes = calculateMasteryChanges(quiz, answers, selectedWords, difficulty)
+    const changed = changes.filter((change) => change.nextLevel !== change.previousLevel)
+    setMasteryChanges(changes)
+    setCompleted(true)
+    if (changed.length) void saveMasteryChanges(changed)
   }
 
   if (completed) {
@@ -140,10 +147,10 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
         <h3>{score === quiz.questions.length ? '全部答对' : '本轮复习完成'}</h3>
         <p>正确率 {Math.round((score / quiz.questions.length) * 100)}%。可以再答一次，或重新选择单词生成新题。</p>
         <TokenUsage quiz={quiz} />
-        <div className="mastery-review" aria-label="掌握程度建议">
+        <div className="mastery-review" aria-label="掌握程度变化">
           <div className="mastery-review-heading">
-            <strong>掌握程度建议</strong>
-            <span>每轮最多调整 1 级</span>
+            <strong>掌握程度变化</strong>
+            <span>每轮自动调整最多 1 级</span>
           </div>
           <ul>
             {masteryChanges.map((change) => (
@@ -158,9 +165,9 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
           {masteryApplied ? (
             <p className="mastery-saved"><Check size={15} />已保存并等待云同步</p>
           ) : changedMastery.length ? (
-            <button className="apply-mastery-button" type="button" onClick={() => void confirmMasteryChanges()} disabled={applyingMastery}>
+            <button className="apply-mastery-button" type="button" onClick={() => void saveMasteryChanges(changedMastery)} disabled={applyingMastery}>
               {applyingMastery ? <LoaderCircle className="spin" size={17} /> : <Check size={17} />}
-              {applyingMastery ? '正在保存…' : `应用 ${changedMastery.length} 个调整`}
+              {applyingMastery ? '正在自动保存…' : `重试保存 ${changedMastery.length} 个调整`}
             </button>
           ) : (
             <p className="mastery-unchanged">本轮证据不足，掌握程度保持不变</p>
