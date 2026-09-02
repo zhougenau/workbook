@@ -26,10 +26,30 @@ type PostgrestErrorLike = {
   message?: unknown
 }
 
+const syncInFlight = new Map<string, Promise<SyncResult>>()
+
 function isOwnershipCollision(error: unknown) {
   if (!error || typeof error !== 'object') return false
   const details = error as PostgrestErrorLike
   return String(details.code) === '42501' && /USING expression/i.test(String(details.message))
+}
+
+function reconcileDuplicateTerms(entries: VocabularyEntry[], userId: string) {
+  const keepByTerm = new Map<string, VocabularyEntry>()
+  for (const entry of entries) {
+    if (entry.deletedAt) continue
+    const normalizedTerm = entry.term.trim().toLocaleLowerCase()
+    const current = keepByTerm.get(normalizedTerm)
+    if (!current || entry.updatedAt > current.updatedAt) keepByTerm.set(normalizedTerm, entry)
+  }
+
+  const keepIds = new Set([...keepByTerm.values()].map((entry) => entry.id))
+  const deletedAt = new Date().toISOString()
+  return entries.map((entry) => (
+    !entry.deletedAt && !keepIds.has(entry.id)
+      ? { ...entry, ownerId: userId, deletedAt, updatedAt: deletedAt, syncStatus: 'pending' as const }
+      : entry
+  ))
 }
 
 function fromCloud(row: CloudEntry): VocabularyEntry {
@@ -62,7 +82,7 @@ function toCloud(entry: VocabularyEntry, userId: string): CloudEntry {
   }
 }
 
-export async function synchronize(user: User): Promise<SyncResult> {
+async function synchronizeOnce(user: User): Promise<SyncResult> {
   if (!supabase) throw new Error('尚未配置 Supabase')
   try {
     await getAccessToken()
@@ -98,7 +118,7 @@ export async function synchronize(user: User): Promise<SyncResult> {
     if (!local || remote.updatedAt > local.updatedAt) merged.set(remote.id, remote)
   }
 
-  let mergedEntries = [...merged.values()]
+  let mergedEntries = reconcileDuplicateTerms([...merged.values()], user.id)
   let toUpload = mergedEntries.filter((entry) => entry.syncStatus !== 'synced')
   const idRemap: Record<string, string> = {}
   if (toUpload.length) {
@@ -156,4 +176,13 @@ export async function synchronize(user: User): Promise<SyncResult> {
   }
 
   return { idRemap, repairedCount: Object.keys(idRemap).length }
+}
+
+export function synchronize(user: User): Promise<SyncResult> {
+  const activeSync = syncInFlight.get(user.id)
+  if (activeSync) return activeSync
+
+  const sync = synchronizeOnce(user).finally(() => syncInFlight.delete(user.id))
+  syncInFlight.set(user.id, sync)
+  return sync
 }
