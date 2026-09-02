@@ -127,6 +127,7 @@ $plainKey = [Net.NetworkCredential]::new('', $secureKey).Password
 npx supabase secrets set "DEEPSEEK_API_KEY=$plainKey"
 Remove-Variable secureKey, plainKey
 npx supabase functions deploy generate-review
+npx supabase functions deploy word-chat
 ```
 
 函数控制台：[`generate-review`](https://supabase.com/dashboard/project/gvgztuwklhlhzorcoouh/functions)。部署时出现 `WARNING: Docker is not running` 可以忽略；Docker 只用于本地运行 Edge Function，不影响远程部署。若提示 `Entrypoint path does not exist`，说明命令不在 wordbook 项目根目录执行，请先运行上面的 `cd` 命令。
@@ -134,6 +135,8 @@ npx supabase functions deploy generate-review
 以上 PowerShell 写法不会把真实 Key 写入命令历史或项目文件。不要创建 `VITE_DEEPSEEK_API_KEY`，也不要把 Key 放入 `.env.local`、GitHub 或 Vercel 前端环境变量；它只能保存在 Supabase Secrets 中。部署成功时 CLI 会显示 `Deployed Functions.`。
 
 使用时先登录，在单词库点击“AI 复习”，可以逐个勾选单词，也可以点击“一键全选”选中整个词库，然后选择 5–10 道题及难度后生成。应用会先同步所选词条；为控制请求体积和 Token 成本，选择超过 20 个词时，每轮会从所选词池随机抽取 20 个交给 AI。未登录、未同步或不属于当前用户的词条不会被函数读取。
+
+每个词条还提供“AI 对话”按钮。对话框会绑定当前单词，可多轮询问释义、词源、搭配、例句、近义词区别和记忆方案。对话记录仅保留在当前弹窗中，不写入数据库；服务端最多接收最近 12 条消息，每条最多 1000 字，并会重新验证登录用户及词条归属。
 
 答题页和结果页会显示本次 DeepSeek 调用的输入、输出及总 Token 数。若模型首次返回无效题目并触发自动重试，页面显示的是两次调用的累计用量；这里只显示 Token 数量，不包含 API Key 或其他敏感信息。
 

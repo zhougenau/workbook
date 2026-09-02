@@ -14,6 +14,7 @@ import {
   ExternalLink,
   LogIn,
   LogOut,
+  MessageCircle,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -38,6 +39,7 @@ import { isCloudConfigured, supabase } from './supabase'
 import { synchronize } from './sync'
 import { ReviewPanel } from './ReviewPanel'
 import type { MasteryChange } from './review'
+import { WordChatDialog } from './WordChatDialog'
 import './App.css'
 
 const masteryLabels = ['未掌握', '刚认识', '有印象', '基本理解', '较熟练', '已掌握']
@@ -165,6 +167,7 @@ function App() {
   const [reviewSelecting, setReviewSelecting] = useState(false)
   const [selectedWordIds, setSelectedWordIds] = useState<string[]>([])
   const [quickReviewRequest, setQuickReviewRequest] = useState(0)
+  const [chatWord, setChatWord] = useState<VocabularyEntry | null>(null)
   const syncTimer = useRef<number | null>(null)
   const reviewWordList = useRef<HTMLDivElement | null>(null)
 
@@ -202,6 +205,22 @@ function App() {
     setQuickReviewRequest((request) => request + 1)
   }
 
+  const startWordChat = (word: VocabularyEntry) => {
+    if (!user) {
+      setCloudOpen(true)
+      setSyncMessage('AI 对话需要登录，以便服务端安全调用 DeepSeek。')
+      window.requestAnimationFrame(() => {
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        document.getElementById('cloud-panel')?.scrollIntoView({
+          behavior: prefersReducedMotion ? 'auto' : 'smooth',
+          block: 'start',
+        })
+      })
+      return
+    }
+    setChatWord(word)
+  }
+
   const toggleSelectedWord = (id: string) => {
     setSelectedWordIds((selected) => selected.includes(id)
       ? selected.filter((wordId) => wordId !== id)
@@ -219,6 +238,14 @@ function App() {
     setSelectedWordIds((selected) => selected.map((id) => result.idRemap[id] ?? id))
     setSyncState('synced')
     return result.idRemap
+  }
+
+  const prepareChatWord = async (id: string) => {
+    if (!user) throw new Error('请先登录后再使用 AI 对话')
+    const result = await synchronize(user)
+    setEntries(await loadEntries(user.id))
+    setSyncState('synced')
+    return result.idRemap[id] ?? id
   }
 
   const applyReviewMasteryChanges = async (changes: MasteryChange[]) => {
@@ -826,6 +853,9 @@ function App() {
                         <button type="button" onClick={() => startSingleWordReview(entry.id)} disabled={reviewSelecting} title={`用 ${entry.term} 进行 AI 测试（5 题 · 基础）`} aria-label={`用 ${entry.term} 进行 AI 测试，5 题，基础难度`}>
                           <BrainCircuit size={17} />
                         </button>
+                        <button type="button" onClick={() => startWordChat(entry)} disabled={reviewSelecting} title={`与 AI 学习 ${entry.term}`} aria-label={`与 AI 对话学习 ${entry.term}`}>
+                          <MessageCircle size={17} />
+                        </button>
                         <a href={dictionaryEngines[dictionaryEngine].getUrl(entry.term)} target="_blank" rel="noreferrer" title={`使用 ${dictionaryEngines[dictionaryEngine].label} 查看 ${entry.term} 的详细解释`} aria-label={`使用 ${dictionaryEngines[dictionaryEngine].label} 查看 ${entry.term} 的详细解释`}>
                           <ExternalLink size={17} />
                         </a>
@@ -881,6 +911,13 @@ function App() {
         <span>词屿 · 本地单词本</span>
         <span>{user ? '数据已加密传输并同步到云端' : '当前数据保存在这台设备上'}</span>
       </footer>
+      {chatWord && (
+        <WordChatDialog
+          word={chatWord}
+          prepareWord={prepareChatWord}
+          onClose={() => setChatWord(null)}
+        />
+      )}
     </div>
   )
 }
