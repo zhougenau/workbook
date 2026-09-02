@@ -164,6 +164,7 @@ function App() {
   const [dictionaryEngine, setDictionaryEngine] = useState<DictionaryEngine>(loadDictionaryEngine)
   const [reviewSelecting, setReviewSelecting] = useState(false)
   const [selectedWordIds, setSelectedWordIds] = useState<string[]>([])
+  const [quickReviewRequest, setQuickReviewRequest] = useState(0)
   const syncTimer = useRef<number | null>(null)
   const reviewWordList = useRef<HTMLDivElement | null>(null)
 
@@ -178,8 +179,27 @@ function App() {
       setSyncMessage('AI 复习需要登录，以便服务端安全调用 DeepSeek。')
       return
     }
+    setQuickReviewRequest(0)
     setReviewSelecting((active) => !active)
     setSelectedWordIds([])
+  }
+
+  const startSingleWordReview = (id: string) => {
+    if (!user) {
+      setCloudOpen(true)
+      setSyncMessage('AI 测试需要登录，以便服务端安全调用 DeepSeek。')
+      window.requestAnimationFrame(() => {
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        document.getElementById('cloud-panel')?.scrollIntoView({
+          behavior: prefersReducedMotion ? 'auto' : 'smooth',
+          block: 'start',
+        })
+      })
+      return
+    }
+    setSelectedWordIds([id])
+    setReviewSelecting(true)
+    setQuickReviewRequest((request) => request + 1)
   }
 
   const toggleSelectedWord = (id: string) => {
@@ -204,7 +224,8 @@ function App() {
   const applyReviewMasteryChanges = async (changes: MasteryChange[]) => {
     const levels = new Map(changes.map((change) => [change.wordId, change.nextLevel]))
     const now = new Date().toISOString()
-    const nextEntries = entries.map((entry) => {
+    const currentEntries = user ? await loadEntries(user.id) : entries
+    const nextEntries = currentEntries.map((entry) => {
       const mastery = levels.get(entry.id)
       return mastery === undefined ? entry : {
         ...entry,
@@ -283,12 +304,16 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!reviewSelecting || !window.matchMedia('(max-width: 520px)').matches) return
+    if (!reviewSelecting) return
+    const quickReview = quickReviewRequest > 0
+    if (!quickReview && !window.matchMedia('(max-width: 520px)').matches) return
     const frame = window.requestAnimationFrame(() => {
-      reviewWordList.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const target = quickReview ? document.getElementById('review-panel') : reviewWordList.current
+      target?.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' })
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [reviewSelecting])
+  }, [reviewSelecting, quickReviewRequest])
 
   const scheduleSync = (activeUser: User) => {
     if (syncTimer.current) window.clearTimeout(syncTimer.current)
@@ -606,7 +631,7 @@ function App() {
 
       <main id="top">
         {cloudOpen && (
-          <section className="cloud-panel" aria-label="云端同步">
+          <section id="cloud-panel" className="cloud-panel" aria-label="云端同步">
             <div>
               <span className="cloud-icon">{isCloudConfigured ? <Cloud size={22} /> : <CloudOff size={22} />}</span>
               <div>
@@ -641,7 +666,7 @@ function App() {
             ) : (
               <code>复制 .env.example 为 .env.local 并填写项目配置</code>
             )}
-            {syncMessage && <p className={`sync-message ${syncState === 'error' ? 'error' : ''}`}>{syncMessage}</p>}
+            {syncMessage && <p className={`sync-message ${syncState === 'error' ? 'error' : ''}`} role="status">{syncMessage}</p>}
           </section>
         )}
         <section className="intro">
@@ -754,12 +779,15 @@ function App() {
                 </button>
               </div>
               <ReviewPanel
+                key={quickReviewRequest ? `quick-${quickReviewRequest}` : 'manual'}
                 selectedWords={selectedWords}
                 prepareWords={prepareReviewWords}
                 applyMasteryChanges={applyReviewMasteryChanges}
+                autoStart={quickReviewRequest > 0}
                 onClose={() => {
                   setReviewSelecting(false)
                   setSelectedWordIds([])
+                  setQuickReviewRequest(0)
                 }}
               />
             </>
@@ -795,6 +823,9 @@ function App() {
                         <time dateTime={entry.createdAt}>添加于 {formatDate(entry.createdAt)}</time>
                       </div>
                       <div className="card-actions">
+                        <button type="button" onClick={() => startSingleWordReview(entry.id)} disabled={reviewSelecting} title={`用 ${entry.term} 进行 AI 测试（5 题 · 基础）`} aria-label={`用 ${entry.term} 进行 AI 测试，5 题，基础难度`}>
+                          <BrainCircuit size={17} />
+                        </button>
                         <a href={dictionaryEngines[dictionaryEngine].getUrl(entry.term)} target="_blank" rel="noreferrer" title={`使用 ${dictionaryEngines[dictionaryEngine].label} 查看 ${entry.term} 的详细解释`} aria-label={`使用 ${dictionaryEngines[dictionaryEngine].label} 查看 ${entry.term} 的详细解释`}>
                           <ExternalLink size={17} />
                         </a>

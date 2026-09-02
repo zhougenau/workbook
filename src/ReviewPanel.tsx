@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { ArrowRight, BrainCircuit, Check, LoaderCircle, RotateCcw, X } from 'lucide-react'
 import { calculateMasteryChanges, generateReview, type MasteryChange, type ReviewDifficulty, type ReviewQuiz } from './review'
 import type { VocabularyEntry } from './storage'
@@ -8,6 +8,7 @@ type ReviewPanelProps = {
   prepareWords: () => Promise<Record<string, string>>
   applyMasteryChanges: (changes: MasteryChange[]) => Promise<void>
   onClose: () => void
+  autoStart?: boolean
 }
 
 const difficultyLabels: Record<ReviewDifficulty, string> = {
@@ -26,7 +27,7 @@ function TokenUsage({ quiz }: { quiz: ReviewQuiz }) {
   )
 }
 
-export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, onClose }: ReviewPanelProps) {
+export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, onClose, autoStart = false }: ReviewPanelProps) {
   const [questionCount, setQuestionCount] = useState(5)
   const [difficulty, setDifficulty] = useState<ReviewDifficulty>('basic')
   const [quiz, setQuiz] = useState<ReviewQuiz | null>(null)
@@ -38,18 +39,30 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
   const [masteryApplied, setMasteryApplied] = useState(false)
   const [applyingMastery, setApplyingMastery] = useState(false)
   const [masteryChanges, setMasteryChanges] = useState<MasteryChange[]>([])
+  const [quizWords, setQuizWords] = useState<VocabularyEntry[]>(selectedWords)
+  const autoStartRequested = useRef(false)
+  const activeRequest = useRef<AbortController | null>(null)
 
   const createQuiz = async (reviewWordIds?: string[]) => {
     if ((!selectedWords.length && !reviewWordIds?.length) || loading) return
+    activeRequest.current?.abort()
+    const request = new AbortController()
+    activeRequest.current = request
     setLoading(true)
     setError('')
     try {
       const idRemap = await prepareWords()
-      const wordIds = reviewWordIds ?? selectedWords
-        .map((word) => idRemap[word.id] ?? word.id)
+      request.signal.throwIfAborted()
+      const canonicalWords = selectedWords.map((word) => ({
+        ...word,
+        id: idRemap[word.id] ?? word.id,
+      }))
+      const wordIds = reviewWordIds ?? canonicalWords
+        .map((word) => word.id)
         .sort(() => Math.random() - 0.5)
         .slice(0, 20)
-      const result = await generateReview(wordIds, questionCount, difficulty)
+      const result = await generateReview(wordIds, questionCount, difficulty, request.signal)
+      setQuizWords(canonicalWords)
       setQuiz(result)
       setCurrentIndex(0)
       setAnswers({})
@@ -57,11 +70,27 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
       setMasteryApplied(false)
       setMasteryChanges([])
     } catch (cause) {
+      if (request.signal.aborted) return
       setError(cause instanceof Error ? cause.message : 'AI 复习题生成失败')
     } finally {
-      setLoading(false)
+      if (activeRequest.current === request) {
+        activeRequest.current = null
+        setLoading(false)
+      }
     }
   }
+
+  const startAutomaticQuiz = useEffectEvent(() => {
+    void createQuiz()
+  })
+
+  useEffect(() => {
+    if (!autoStart || autoStartRequested.current) return
+    autoStartRequested.current = true
+    startAutomaticQuiz()
+  }, [autoStart])
+
+  useEffect(() => () => activeRequest.current?.abort(), [])
 
   const restart = () => {
     setCurrentIndex(0)
@@ -71,7 +100,7 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
 
   if (!quiz) {
     return (
-      <section className="review-panel" aria-labelledby="review-panel-title">
+      <section id="review-panel" className="review-panel" aria-labelledby="review-panel-title">
         <div className="review-panel-heading">
           <div>
             <span className="review-kicker"><BrainCircuit size={16} />DEEPSEEK AI REVIEW</span>
@@ -132,7 +161,7 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
       setCompleted(true)
       return
     }
-    const changes = calculateMasteryChanges(quiz, answers, selectedWords, difficulty)
+    const changes = calculateMasteryChanges(quiz, answers, quizWords, difficulty)
     const changed = changes.filter((change) => change.nextLevel !== change.previousLevel)
     setMasteryChanges(changes)
     setCompleted(true)
@@ -141,7 +170,7 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
 
   if (completed) {
     return (
-      <section className="review-panel review-result" aria-live="polite">
+      <section id="review-panel" className="review-panel review-result" aria-live="polite">
         <span className="review-kicker"><Check size={16} />REVIEW COMPLETE</span>
         <strong>{score}<small> / {quiz.questions.length}</small></strong>
         <h3>{score === quiz.questions.length ? '全部答对' : '本轮复习完成'}</h3>
@@ -194,7 +223,7 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
   const answered = selectedAnswer !== undefined
 
   return (
-    <section className="review-panel review-quiz" aria-labelledby="review-question-title">
+    <section id="review-panel" className="review-panel review-quiz" aria-labelledby="review-question-title" aria-live="polite">
       <div className="review-progress">
         <span>{quiz.title}</span>
         <strong>{currentIndex + 1} / {quiz.questions.length}</strong>

@@ -142,6 +142,7 @@ export async function generateReview(
   wordIds: string[],
   questionCount: number,
   difficulty: ReviewDifficulty,
+  signal?: AbortSignal,
 ) {
   if (!supabase) throw new Error('尚未配置 Supabase')
   const accessToken = await getAccessToken()
@@ -149,6 +150,7 @@ export async function generateReview(
   const { data, error } = await supabase.functions.invoke('generate-review', {
     body: { wordIds, questionCount, difficulty },
     headers: { Authorization: `Bearer ${accessToken}` },
+    signal,
   })
   if (error) throw new Error(await getFunctionErrorMessage(error))
   return parseReviewQuiz(data, questionCount)
