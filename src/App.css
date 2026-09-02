@@ -232,7 +232,7 @@
 .cloud-actions button:hover, .login-form button:hover { color: var(--ink); background: var(--coral); }
 .cloud-actions button:disabled, .login-form button:disabled { opacity: .55; cursor: wait; }
 .login-form input { width: min(260px, 36vw); height: 38px; padding: 0 11px; color: var(--ink); background: var(--paper); border: 1px solid var(--ink); outline: 0; }
-.sync-message { grid-column: 1 / -1; padding-top: 12px; border-top: 1px solid rgba(23, 23, 19, .25); }
+.sync-message { grid-column: 1 / -1; padding-top: 12px; white-space: pre-line; overflow-wrap: anywhere; border-top: 1px solid rgba(23, 23, 19, .25); }
 .sync-message.error { color: var(--coral-dark); }
 .intro { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 48px; padding: 88px 0 72px; }
 .eyebrow { margin: 0 0 18px; color: var(--coral-dark); font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 0; }

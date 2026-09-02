@@ -1,6 +1,7 @@
 import type { User } from '@supabase/supabase-js'
 import { db, type VocabularyEntry } from './storage'
 import { getAccessToken, supabase } from './supabase'
+import { createSyncError } from './syncError'
 
 type CloudEntry = {
   id: string
@@ -47,9 +48,18 @@ function toCloud(entry: VocabularyEntry, userId: string): CloudEntry {
 
 export async function synchronize(user: User) {
   if (!supabase) throw new Error('尚未配置 Supabase')
-  await getAccessToken()
+  try {
+    await getAccessToken()
+  } catch (error) {
+    throw createSyncError('验证登录状态', error)
+  }
 
-  const allLocal = await db.entries.toArray()
+  let allLocal: VocabularyEntry[]
+  try {
+    allLocal = await db.entries.toArray()
+  } catch (error) {
+    throw createSyncError('读取本地词条', error)
+  }
   const ownedLocal = allLocal
     .filter((entry) => entry.ownerId === user.id || entry.ownerId === null)
     .map((entry) => ({
@@ -62,7 +72,7 @@ export async function synchronize(user: User) {
     .from('vocabulary_entries')
     .select('*')
     .eq('user_id', user.id)
-  if (pullError) throw pullError
+  if (pullError) throw createSyncError('下载云端词条', pullError)
 
   const merged = new Map<string, VocabularyEntry>()
   for (const entry of ownedLocal) merged.set(entry.id, entry)
@@ -78,10 +88,14 @@ export async function synchronize(user: User) {
     const { error: pushError } = await supabase
       .from('vocabulary_entries')
       .upsert(toUpload.map((entry) => toCloud(entry, user.id)), { onConflict: 'id' })
-    if (pushError) throw pushError
+    if (pushError) throw createSyncError('上传本地词条', pushError, toUpload.length)
   }
 
-  await db.entries.bulkPut(
-    mergedEntries.map((entry) => ({ ...entry, ownerId: user.id, syncStatus: 'synced' })),
-  )
+  try {
+    await db.entries.bulkPut(
+      mergedEntries.map((entry) => ({ ...entry, ownerId: user.id, syncStatus: 'synced' })),
+    )
+  } catch (error) {
+    throw createSyncError('保存同步结果', error)
+  }
 }

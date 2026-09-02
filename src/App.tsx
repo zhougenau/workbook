@@ -214,7 +214,12 @@ function App() {
   }
 
   const performSync = async (activeUser: User) => {
-    if (!navigator.onLine) return
+    if (!navigator.onLine) {
+      setSyncState('error')
+      setSyncMessage('同步失败 · 网络连接\n原因：浏览器当前处于离线状态\n调试方向：恢复网络后点击“立即同步”重试。\n本地词条不会因同步失败而丢失。')
+      setCloudOpen(true)
+      return
+    }
     setSyncState('syncing')
     setSyncMessage('')
     try {
@@ -224,6 +229,7 @@ function App() {
     } catch (error) {
       setSyncState('error')
       setSyncMessage(error instanceof Error ? error.message : '同步失败')
+      setCloudOpen(true)
     }
   }
 
@@ -543,7 +549,7 @@ function App() {
           </time>
           <button className={`sync-button ${syncState}`} type="button" onClick={() => setCloudOpen(!cloudOpen)} aria-label="云端同步">
             {isCloudConfigured ? <Cloud size={17} /> : <CloudOff size={17} />}
-            <span>{user ? (syncState === 'syncing' ? '同步中' : '已登录') : '同步'}</span>
+            <span>{user ? (syncState === 'syncing' ? '同步中' : syncState === 'error' ? '同步异常' : '已登录') : '同步'}</span>
           </button>
           <button className="icon-button" type="button" onClick={exportEntries} title="导出备份" disabled={!entries.length}>
             <Download size={18} />
