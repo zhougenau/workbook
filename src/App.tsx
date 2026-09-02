@@ -28,7 +28,6 @@ import {
   initializeStorage,
   loadEntries,
   parseBackup,
-  replaceEntries,
   saveEntries,
   saveEntry,
   type VocabularyEntry,
@@ -40,6 +39,11 @@ import type { MasteryChange } from './review'
 import './App.css'
 
 const masteryLabels = ['未掌握', '刚认识', '有印象', '基本理解', '较熟练', '已掌握']
+
+function normalizeTerm(value: string) {
+  return value.trim().toLocaleLowerCase()
+}
+
 const dictionaryEngines = {
   merriamWebster: {
     label: 'Merriam-Webster',
@@ -289,7 +293,7 @@ function App() {
     if (!cleanTerm) return
 
     const duplicate = entries.find(
-      (entry) => entry.term.toLocaleLowerCase() === cleanTerm.toLocaleLowerCase(),
+      (entry) => normalizeTerm(entry.term) === normalizeTerm(cleanTerm),
     )
     if (duplicate) {
       setMessage(`“${duplicate.term}” 已经在单词本里了`)
@@ -372,15 +376,36 @@ function App() {
 
     try {
       const imported = parseBackup(await file.text())
-      const prepared = imported.map((entry) => ({
-        ...entry,
-        ownerId: user?.id ?? null,
-        syncStatus: user ? 'pending' as const : 'local' as const,
-      }))
-      await replaceEntries(prepared)
-      setEntries(prepared.filter((entry) => !entry.deletedAt))
-      if (user) scheduleSync(user)
-      setMessage(`已恢复 ${imported.length} 个单词`)
+      const targetOwnerId = user?.id ?? null
+      const existingTerms = new Set(entries.map((entry) => normalizeTerm(entry.term)))
+      let skippedCount = 0
+      const prepared = imported.flatMap((entry) => {
+        const normalizedTerm = normalizeTerm(entry.term)
+        if (existingTerms.has(normalizedTerm)) {
+          skippedCount += 1
+          return []
+        }
+        existingTerms.add(normalizedTerm)
+
+        const isCrossAccountImport = entry.ownerId !== targetOwnerId
+        const importedAt = new Date().toISOString()
+        return [{
+          id: isCrossAccountImport ? crypto.randomUUID() : entry.id,
+          term: entry.term.trim(),
+          meaning: entry.meaning,
+          note: entry.note,
+          mastery: entry.mastery,
+          createdAt: isCrossAccountImport ? importedAt : entry.createdAt,
+          updatedAt: isCrossAccountImport ? importedAt : entry.updatedAt,
+          ownerId: targetOwnerId,
+          deletedAt: null,
+          syncStatus: user ? 'pending' as const : 'local' as const,
+        }]
+      })
+      await saveEntries(prepared)
+      setEntries([...prepared, ...entries])
+      if (user && prepared.length) scheduleSync(user)
+      setMessage(`已导入 ${prepared.length} 个单词${skippedCount ? `，跳过 ${skippedCount} 个重复单词` : ''}`)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '无法读取备份文件')
     }
