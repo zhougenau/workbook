@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { BookText, Check, LoaderCircle, RotateCcw, X } from 'lucide-react'
+import { BookText, Check, LoaderCircle, RotateCcw, Square, Volume2, X } from 'lucide-react'
 import { generatePassage, type GeneratedPassage, type PassageLength } from './passage'
 import type { VocabularyEntry } from './storage'
 
@@ -51,14 +51,52 @@ export function PassagePanel({ selectedWords, prepareWords, onClose }: PassagePa
   const [result, setResult] = useState<GeneratedPassage | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [isSpeaking, setIsSpeaking] = useState(false)
   const activeRequest = useRef<AbortController | null>(null)
+  const activeUtterance = useRef<SpeechSynthesisUtterance | null>(null)
 
-  useEffect(() => () => activeRequest.current?.abort(), [])
+  useEffect(() => () => {
+    activeRequest.current?.abort()
+    window.speechSynthesis?.cancel()
+  }, [])
 
   const length = chosenLength ?? defaultLength(selectedWords.length)
 
+  const stopReading = () => {
+    window.speechSynthesis?.cancel()
+    activeUtterance.current = null
+    setIsSpeaking(false)
+  }
+
+  const toggleReading = () => {
+    if (isSpeaking) {
+      stopReading()
+      return
+    }
+    if (!result || !Reflect.has(window, 'speechSynthesis')) {
+      window.alert('当前浏览器不支持语音朗读')
+      return
+    }
+
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(`${result.title}. ${result.passage}`)
+    utterance.lang = 'en-US'
+    utterance.rate = 0.85
+    utterance.onend = () => {
+      if (activeUtterance.current === utterance) {
+        activeUtterance.current = null
+        setIsSpeaking(false)
+      }
+    }
+    utterance.onerror = utterance.onend
+    activeUtterance.current = utterance
+    setIsSpeaking(true)
+    window.speechSynthesis.speak(utterance)
+  }
+
   const createPassage = async () => {
     if (!selectedWords.length || loading) return
+    stopReading()
     activeRequest.current?.abort()
     const request = new AbortController()
     activeRequest.current = request
@@ -87,7 +125,7 @@ export function PassagePanel({ selectedWords, prepareWords, onClose }: PassagePa
           <h3 id="passage-panel-title">用所选单词生成短文</h3>
           <p>已选择 {selectedWords.length} 个单词。AI 会将每个词自然地写入同一篇英文短文。</p>
         </div>
-        <button className="review-close" type="button" onClick={onClose} title="退出短文选择" aria-label="退出短文选择"><X size={18} /></button>
+        <button className="review-close" type="button" onClick={() => { stopReading(); onClose() }} title="退出短文选择" aria-label="退出短文选择"><X size={18} /></button>
       </div>
 
       <div className="passage-settings" role="group" aria-label="短文长度">
@@ -119,11 +157,17 @@ export function PassagePanel({ selectedWords, prepareWords, onClose }: PassagePa
               <span>ENGLISH PASSAGE</span>
               <h4>{result.title}</h4>
             </div>
-            <dl className="review-token-usage" aria-label="本次 AI Token 用量">
-              <div><dt>输入</dt><dd>{result.tokenUsage.promptTokens.toLocaleString()}</dd></div>
-              <div><dt>输出</dt><dd>{result.tokenUsage.completionTokens.toLocaleString()}</dd></div>
-              <div><dt>总计</dt><dd>{result.tokenUsage.totalTokens.toLocaleString()}</dd></div>
-            </dl>
+            <div className="passage-result-actions">
+              <button className={isSpeaking ? 'passage-speak-button active' : 'passage-speak-button'} type="button" onClick={toggleReading} aria-pressed={isSpeaking} title={isSpeaking ? '停止朗读' : '朗读英文短文'}>
+                {isSpeaking ? <Square size={15} fill="currentColor" /> : <Volume2 size={17} />}
+                {isSpeaking ? '停止' : '朗读'}
+              </button>
+              <dl className="review-token-usage" aria-label="本次 AI Token 用量">
+                <div><dt>输入</dt><dd>{result.tokenUsage.promptTokens.toLocaleString()}</dd></div>
+                <div><dt>输出</dt><dd>{result.tokenUsage.completionTokens.toLocaleString()}</dd></div>
+                <div><dt>总计</dt><dd>{result.tokenUsage.totalTokens.toLocaleString()}</dd></div>
+              </dl>
+            </div>
           </div>
           <p className="passage-copy">{highlightWords(result.passage, result.usedWords)}</p>
           <div className="passage-translation">

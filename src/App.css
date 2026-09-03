@@ -340,6 +340,9 @@
 .passage-result-heading { display: flex; padding: 18px 20px; align-items: flex-start; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--ink); }
 .passage-result-heading span { color: var(--coral-dark); font: 700 10px/1 var(--mono); }
 .passage-result-heading h4 { margin: 6px 0 0; font-family: var(--display); font-size: 25px; letter-spacing: 0; }
+.passage-result-actions { display: flex; align-items: center; gap: 12px; }
+.passage-speak-button { display: inline-flex; min-width: 76px; height: 38px; padding: 0 12px; align-items: center; justify-content: center; gap: 7px; color: var(--ink); font-weight: 700; background: transparent; border: 1px solid var(--ink); cursor: pointer; }
+.passage-speak-button:hover, .passage-speak-button.active { color: var(--paper); background: var(--coral-dark); }
 .passage-result-heading .review-token-usage { margin: 0; color: var(--muted); }
 .passage-result-heading .review-token-usage dd { color: var(--ink); }
 .passage-copy { margin: 0; padding: 24px 20px; white-space: pre-wrap; font-family: Georgia, serif; font-size: 16px; line-height: 1.85; }
@@ -540,6 +543,8 @@
   .passage-settings { grid-template-columns: 1fr; }
   .passage-settings .generate-review-button { grid-column: auto; }
   .passage-result-heading { align-items: stretch; flex-direction: column; }
+  .passage-result-actions { align-items: stretch; flex-direction: column; }
+  .passage-speak-button { width: 100%; }
   .passage-result-heading .review-token-usage { flex-wrap: wrap; }
   .pagination { grid-template-columns: 1fr; justify-items: center; gap: 10px; padding-block: 14px; }
   .pagination > span, .pagination small { justify-self: center; }
