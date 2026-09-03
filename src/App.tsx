@@ -7,6 +7,10 @@ import {
   Check,
   CheckSquare2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Clock3,
   Cloud,
   CloudOff,
@@ -162,6 +166,8 @@ function App() {
   const [search, setSearch] = useState('')
   const [masteryFilter, setMasteryFilter] = useState('all')
   const [sort, setSort] = useState('newest')
+  const [pageSize, setPageSize] = useState(10)
+  const [currentPage, setCurrentPage] = useState(1)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState({ meaning: '', note: '' })
   const [message, setMessage] = useState('')
@@ -674,10 +680,15 @@ function App() {
   const selectedWords = entries.filter((entry) => selectedWordIds.includes(entry.id))
   const allWordsSelected = entries.length > 0 && selectedWordIds.length === entries.length
   const selectingWords = reviewSelecting || passageSelecting
+  const totalPages = Math.max(1, Math.ceil(visibleEntries.length / pageSize))
+  const activePage = Math.min(currentPage, totalPages)
+  const pageStart = (activePage - 1) * pageSize
+  const paginatedEntries = visibleEntries.slice(pageStart, pageStart + pageSize)
 
   const showStatisticEntries = (filter: 'all' | 'learning' | '5') => {
     setSearch('')
     setMasteryFilter(filter)
+    setCurrentPage(1)
     window.requestAnimationFrame(() => {
       const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       document.getElementById('library-title')?.scrollIntoView({
@@ -846,11 +857,11 @@ function App() {
           <div className="toolbar">
             <label className="search-box">
               <Search size={18} />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索单词、释义或笔记" />
-              {search && <button type="button" onClick={() => setSearch('')} title="清除搜索"><X size={16} /></button>}
+              <input value={search} onChange={(event) => { setSearch(event.target.value); setCurrentPage(1) }} placeholder="搜索单词、释义或笔记" />
+              {search && <button type="button" onClick={() => { setSearch(''); setCurrentPage(1) }} title="清除搜索"><X size={16} /></button>}
             </label>
             <label className="select-wrap">
-              <select value={masteryFilter} onChange={(event) => setMasteryFilter(event.target.value)} aria-label="按掌握度筛选">
+              <select value={masteryFilter} onChange={(event) => { setMasteryFilter(event.target.value); setCurrentPage(1) }} aria-label="按掌握度筛选">
                 <option value="all">全部程度</option>
                 <option value="learning">学习中 · 1–4</option>
                 {masteryLabels.map((label, index) => <option key={label} value={index}>{index} · {label}</option>)}
@@ -858,11 +869,19 @@ function App() {
               <ChevronDown size={16} />
             </label>
             <label className="select-wrap">
-              <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="排序方式">
+              <select value={sort} onChange={(event) => { setSort(event.target.value); setCurrentPage(1) }} aria-label="排序方式">
                 <option value="newest">最近添加</option>
                 <option value="oldest">最早添加</option>
                 <option value="az">字母顺序</option>
                 <option value="mastery">掌握度优先</option>
+              </select>
+              <ChevronDown size={16} />
+            </label>
+            <label className="select-wrap page-size-select">
+              <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setCurrentPage(1) }} aria-label="每页显示数量">
+                <option value={10}>每页 10 个</option>
+                <option value={20}>每页 20 个</option>
+                <option value={50}>每页 50 个</option>
               </select>
               <ChevronDown size={16} />
             </label>
@@ -913,7 +932,7 @@ function App() {
             </div>
           ) : (
             <div className="word-list" ref={reviewWordList}>
-              {visibleEntries.map((entry, index) => (
+              {paginatedEntries.map((entry, index) => (
                 <article className={`word-card ${selectingWords ? 'review-word-card' : ''} ${selectedWordIds.includes(entry.id) ? 'selected-for-review' : ''}`} key={entry.id}>
                   <div className={`word-index ${selectingWords ? 'review-select-index' : ''}`}>
                     {selectingWords ? (
@@ -921,7 +940,7 @@ function App() {
                         <input type="checkbox" checked={selectedWordIds.includes(entry.id)} onChange={() => toggleSelectedWord(entry.id)} aria-label={`选择 ${entry.term} 进行${passageSelecting ? '短文生成' : '复习'}`} />
                         <span><Check size={15} /></span>
                       </label>
-                    ) : String(index + 1).padStart(2, '0')}
+                    ) : String(pageStart + index + 1).padStart(2, '0')}
                   </div>
                   <div className="word-content">
                     <div className="word-title-row">
@@ -988,6 +1007,18 @@ function App() {
                 </article>
               ))}
             </div>
+          )}
+          {!!visibleEntries.length && (
+            <nav className="pagination" aria-label="单词分页导航">
+              <span>第 <strong>{activePage}</strong> / {totalPages} 页</span>
+              <div>
+                <button type="button" onClick={() => setCurrentPage(1)} disabled={activePage === 1} aria-label="最前页" title="最前页"><ChevronsLeft size={18} /></button>
+                <button type="button" onClick={() => setCurrentPage(Math.max(1, activePage - 1))} disabled={activePage === 1} aria-label="上一页" title="上一页"><ChevronLeft size={18} /></button>
+                <button type="button" onClick={() => setCurrentPage(Math.min(totalPages, activePage + 1))} disabled={activePage === totalPages} aria-label="下一页" title="下一页"><ChevronRight size={18} /></button>
+                <button type="button" onClick={() => setCurrentPage(totalPages)} disabled={activePage === totalPages} aria-label="最后页" title="最后页"><ChevronsRight size={18} /></button>
+              </div>
+              <small>显示 {pageStart + 1}–{Math.min(pageStart + pageSize, visibleEntries.length)}，共 {visibleEntries.length} 个</small>
+            </nav>
           )}
         </section>
       </main>

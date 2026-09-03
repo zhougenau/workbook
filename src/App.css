@@ -292,7 +292,7 @@
 .passage-start-button { display: inline-flex; min-width: 112px; height: 42px; padding: 0 15px; align-items: center; justify-content: center; gap: 7px; color: var(--ink); font-weight: 700; background: var(--coral); border: 1px solid var(--ink); cursor: pointer; }
 .passage-start-button:hover, .passage-start-button.active { color: var(--paper); background: var(--coral-dark); }
 .passage-start-button:disabled { opacity: .35; cursor: not-allowed; }
-.toolbar { display: grid; grid-template-columns: 1fr auto auto; margin-bottom: 24px; border-block: 1px solid var(--ink); }
+.toolbar { display: grid; grid-template-columns: 1fr auto auto auto; margin-bottom: 24px; border-block: 1px solid var(--ink); }
 .search-box { display: flex; height: 54px; padding: 0 16px; align-items: center; gap: 10px; border-right: 1px solid var(--ink); }
 .search-box input { min-width: 0; flex: 1; background: transparent; border: 0; outline: 0; }
 .search-box button { display: grid; padding: 4px; place-items: center; background: transparent; border: 0; cursor: pointer; }
@@ -300,6 +300,15 @@
 .select-wrap:last-child { border-right: 0; }
 .select-wrap select { width: 100%; height: 54px; padding: 0 38px 0 16px; color: var(--ink); background: transparent; border: 0; outline: 0; appearance: none; cursor: pointer; }
 .select-wrap svg { position: absolute; right: 14px; pointer-events: none; }
+.page-size-select { min-width: 132px; }
+.pagination { display: grid; min-height: 62px; margin-top: 26px; padding: 10px 14px; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 18px; border-block: 1px solid var(--ink); }
+.pagination > span { color: var(--muted); font-size: 12px; }
+.pagination > span strong { color: var(--ink); font-family: var(--mono); }
+.pagination > div { display: flex; gap: 6px; }
+.pagination button { display: grid; width: 38px; height: 38px; padding: 0; place-items: center; color: var(--ink); background: transparent; border: 1px solid var(--ink); cursor: pointer; }
+.pagination button:hover:not(:disabled) { background: var(--lime); }
+.pagination button:disabled { opacity: .28; cursor: not-allowed; }
+.pagination small { justify-self: end; color: var(--muted); font-family: var(--mono); font-size: 10px; }
 .review-selection-bar { display: flex; min-height: 44px; margin: -8px 0 14px; padding: 0 12px 0 16px; align-items: center; justify-content: space-between; gap: 16px; color: var(--muted); background: color-mix(in srgb, var(--lime) 22%, transparent); border: 1px solid var(--ink); }
 .review-selection-bar span { font-size: 12px; }
 .review-selection-bar strong { color: var(--ink); font-family: var(--mono); }
@@ -502,6 +511,7 @@
   .toolbar { grid-template-columns: 1fr 1fr; }
   .search-box { grid-column: 1 / -1; border-right: 0; border-bottom: 1px solid var(--ink); }
   .select-wrap { min-width: 0; }
+  .page-size-select { grid-column: 1 / -1; border-top: 1px solid var(--ink); border-right: 0; }
   .word-card { grid-template-columns: 34px 1fr; }
   .review-select-index { align-self: start; }
   .word-title-row { gap: 12px; }
@@ -531,6 +541,8 @@
   .passage-settings .generate-review-button { grid-column: auto; }
   .passage-result-heading { align-items: stretch; flex-direction: column; }
   .passage-result-heading .review-token-usage { flex-wrap: wrap; }
+  .pagination { grid-template-columns: 1fr; justify-items: center; gap: 10px; padding-block: 14px; }
+  .pagination > span, .pagination small { justify-self: center; }
   .generate-review-button { grid-column: auto; }
   .review-result-actions, .review-question-actions { align-items: stretch; flex-direction: column; }
   .review-result-actions button, .review-question-actions button { width: 100%; }
