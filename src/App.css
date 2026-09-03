@@ -334,6 +334,7 @@
 .passage-result-heading .review-token-usage { margin: 0; color: var(--muted); }
 .passage-result-heading .review-token-usage dd { color: var(--ink); }
 .passage-copy { margin: 0; padding: 24px 20px; white-space: pre-wrap; font-family: Georgia, serif; font-size: 16px; line-height: 1.85; }
+.passage-target-word { padding-inline: 2px; font-weight: 800; background: color-mix(in srgb, var(--lime) 55%, transparent); }
 .passage-translation { padding: 18px 20px; background: #fff; border-block: 1px solid var(--line); }
 .passage-translation > strong { color: var(--coral-dark); font-size: 12px; }
 .passage-translation p { margin: 8px 0 0; white-space: pre-wrap; color: var(--muted); font-size: 14px; line-height: 1.75; }

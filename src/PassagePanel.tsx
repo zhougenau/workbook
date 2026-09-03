@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { BookText, Check, LoaderCircle, RotateCcw, X } from 'lucide-react'
 import { generatePassage, type GeneratedPassage, type PassageLength } from './passage'
 import type { VocabularyEntry } from './storage'
@@ -19,6 +19,31 @@ function defaultLength(wordCount: number): PassageLength {
   if (wordCount > 20) return 'long'
   if (wordCount > 10) return 'medium'
   return 'short'
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function highlightWords(passage: string, words: string[]) {
+  const uniqueWords = [...new Map(words.map((word) => word.trim()).filter(Boolean)
+    .map((word) => [word.toLowerCase(), word])).values()]
+    .sort((left, right) => right.length - left.length)
+  if (!uniqueWords.length) return passage
+
+  const matcher = new RegExp(`(^|[^\\p{L}\\p{M}\\p{N}])(${uniqueWords.map(escapeRegExp).join('|')})(?![\\p{L}\\p{M}\\p{N}])`, 'giu')
+  const parts: ReactNode[] = []
+  let cursor = 0
+
+  for (const match of passage.matchAll(matcher)) {
+    const wordStart = match.index + match[1].length
+    parts.push(passage.slice(cursor, wordStart))
+    parts.push(<strong className="passage-target-word" key={wordStart}>{match[2]}</strong>)
+    cursor = wordStart + match[2].length
+  }
+
+  parts.push(passage.slice(cursor))
+  return parts
 }
 
 export function PassagePanel({ selectedWords, prepareWords, onClose }: PassagePanelProps) {
@@ -100,7 +125,7 @@ export function PassagePanel({ selectedWords, prepareWords, onClose }: PassagePa
               <div><dt>总计</dt><dd>{result.tokenUsage.totalTokens.toLocaleString()}</dd></div>
             </dl>
           </div>
-          <p className="passage-copy">{result.passage}</p>
+          <p className="passage-copy">{highlightWords(result.passage, result.usedWords)}</p>
           <div className="passage-translation">
             <strong>参考译文</strong>
             <p>{result.translation}</p>
