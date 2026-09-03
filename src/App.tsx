@@ -253,8 +253,12 @@ function App() {
       : [...selected, id])
   }
 
-  const toggleSelectAllWords = () => {
-    setSelectedWordIds((selected) => selected.length === entries.length ? [] : entries.map((entry) => entry.id))
+  const toggleSelectAllWords = (pageWordIds: string[]) => {
+    setSelectedWordIds((selected) => {
+      const onlyPageWordsSelected = selected.length === pageWordIds.length
+        && pageWordIds.every((id) => selected.includes(id))
+      return onlyPageWordsSelected ? [] : pageWordIds
+    })
   }
 
   const prepareReviewWords = async () => {
@@ -678,12 +682,14 @@ function App() {
   const masteredCount = entries.filter((entry) => entry.mastery === 5).length
   const learningCount = entries.filter((entry) => entry.mastery > 0 && entry.mastery < 5).length
   const selectedWords = entries.filter((entry) => selectedWordIds.includes(entry.id))
-  const allWordsSelected = entries.length > 0 && selectedWordIds.length === entries.length
   const selectingWords = reviewSelecting || passageSelecting
   const totalPages = Math.max(1, Math.ceil(visibleEntries.length / pageSize))
   const activePage = Math.min(currentPage, totalPages)
   const pageStart = (activePage - 1) * pageSize
   const paginatedEntries = visibleEntries.slice(pageStart, pageStart + pageSize)
+  const onlyPageWordsSelected = paginatedEntries.length > 0
+    && selectedWordIds.length === paginatedEntries.length
+    && paginatedEntries.every((entry) => selectedWordIds.includes(entry.id))
 
   const showStatisticEntries = (filter: 'all' | 'learning' | '5') => {
     setSearch('')
@@ -891,9 +897,9 @@ function App() {
             <>
               <div className="review-selection-bar">
                 <span>已选择 <strong>{selectedWordIds.length}</strong> / {entries.length} 个单词</span>
-                <button type="button" onClick={toggleSelectAllWords}>
-                  {allWordsSelected ? <X size={16} /> : <CheckSquare2 size={16} />}
-                  {allWordsSelected ? '清空选择' : '一键全选'}
+                <button type="button" onClick={() => toggleSelectAllWords(paginatedEntries.map((entry) => entry.id))}>
+                  {onlyPageWordsSelected ? <X size={16} /> : <CheckSquare2 size={16} />}
+                  {onlyPageWordsSelected ? '取消本页' : '一键全选'}
                 </button>
               </div>
               {reviewSelecting && (
