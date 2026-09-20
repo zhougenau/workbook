@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Layers3, LoaderCircle, RotateCcw, Volume2, X } from 'lucide-react'
-import { generateFlashcards, type GeneratedFlashcards } from './flashcards'
+import { generateFlashcards, type Flashcard, type GeneratedFlashcards } from './flashcards'
 import type { VocabularyEntry } from './storage'
 
 type FlashcardPanelProps = {
@@ -21,6 +21,18 @@ function randomSample(words: VocabularyEntry[], count: number) {
   return shuffled.slice(0, count)
 }
 
+function readFlashcard(card: Flashcard, showUnsupportedMessage = false) {
+  if (!Reflect.has(window, 'speechSynthesis')) {
+    if (showUnsupportedMessage) window.alert('当前浏览器不支持语音朗读')
+    return
+  }
+  window.speechSynthesis.cancel()
+  const utterance = new SpeechSynthesisUtterance(`${card.word}. ${card.usage}`)
+  utterance.lang = 'en-US'
+  utterance.rate = 0.85
+  window.speechSynthesis.speak(utterance)
+}
+
 export function FlashcardPanel({ allWords, selectedWords, prepareWords, onClose }: FlashcardPanelProps) {
   const [result, setResult] = useState<GeneratedFlashcards | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
@@ -28,7 +40,10 @@ export function FlashcardPanel({ allWords, selectedWords, prepareWords, onClose 
   const [error, setError] = useState('')
   const activeRequest = useRef<AbortController | null>(null)
 
-  useEffect(() => () => activeRequest.current?.abort(), [])
+  useEffect(() => () => {
+    activeRequest.current?.abort()
+    window.speechSynthesis?.cancel()
+  }, [])
 
   const createFlashcards = async () => {
     if (!allWords.length || loading) return
@@ -55,17 +70,12 @@ export function FlashcardPanel({ allWords, selectedWords, prepareWords, onClose 
   }
 
   const card = result?.cards[activeIndex]
-  const speak = () => {
-    if (!card || !Reflect.has(window, 'speechSynthesis')) {
-      window.alert('当前浏览器不支持语音朗读')
-      return
-    }
-    window.speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(`${card.word}. ${card.usage}`)
-    utterance.lang = 'en-US'
-    utterance.rate = 0.85
-    window.speechSynthesis.speak(utterance)
-  }
+
+  useEffect(() => {
+    if (!card) return
+    readFlashcard(card)
+    return () => window.speechSynthesis?.cancel()
+  }, [card])
 
   return (
     <section id="flashcard-panel" className="review-panel flashcard-panel" aria-labelledby="flashcard-panel-title">
@@ -96,7 +106,7 @@ export function FlashcardPanel({ allWords, selectedWords, prepareWords, onClose 
           <article className="flashcard">
             <div className="flashcard-word-row">
               <h4>{card.word}</h4>
-              <button type="button" onClick={speak} title={`朗读 ${card.word} 和用法`} aria-label={`朗读 ${card.word} 和用法`}><Volume2 size={18} /></button>
+              <button type="button" onClick={() => readFlashcard(card, true)} title={`重新朗读 ${card.word} 和用法`} aria-label={`重新朗读 ${card.word} 和用法`}><Volume2 size={18} /></button>
             </div>
             <div><span>释义</span><p>{card.meaning}</p></div>
             <div><span>用法</span><p lang="en">{card.usage}</p></div>
