@@ -292,6 +292,9 @@
 .passage-start-button { display: inline-flex; min-width: 112px; height: 42px; padding: 0 15px; align-items: center; justify-content: center; gap: 7px; color: var(--ink); font-weight: 700; background: var(--coral); border: 1px solid var(--ink); cursor: pointer; }
 .passage-start-button:hover, .passage-start-button.active { color: var(--paper); background: var(--coral-dark); }
 .passage-start-button:disabled { opacity: .35; cursor: not-allowed; }
+.flashcard-start-button { display: inline-flex; min-width: 112px; height: 42px; padding: 0 15px; align-items: center; justify-content: center; gap: 7px; color: var(--ink); font-weight: 700; background: var(--lime); border: 1px solid var(--ink); cursor: pointer; }
+.flashcard-start-button:hover, .flashcard-start-button.active { color: var(--paper); background: var(--ink); }
+.flashcard-start-button:disabled { opacity: .35; cursor: not-allowed; }
 .toolbar { display: grid; grid-template-columns: 1fr auto auto auto; margin-bottom: 24px; border-block: 1px solid var(--ink); }
 .search-box { display: flex; height: 54px; padding: 0 16px; align-items: center; gap: 10px; border-right: 1px solid var(--ink); }
 .search-box input { min-width: 0; flex: 1; background: transparent; border: 0; outline: 0; }
@@ -354,6 +357,25 @@
 .passage-used-words > span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; }
 .passage-used-words > div { display: flex; flex-wrap: wrap; gap: 6px; }
 .passage-used-words b { padding: 5px 8px; font: 700 10px/1 var(--mono); background: var(--lime); border: 1px solid var(--ink); }
+.flashcard-panel { border-left-color: var(--lime); }
+.flashcard-actions { display: flex; margin-top: 24px; justify-content: flex-end; }
+.flashcard-study { max-width: 760px; margin: 24px auto 0; }
+.flashcard-progress { display: flex; margin-bottom: 8px; align-items: center; justify-content: space-between; color: #aaa7a1; font: 700 10px/1 var(--mono); }
+.flashcard-progress strong { color: var(--lime); font-size: 12px; }
+.flashcard { display: grid; min-height: 280px; padding: 28px; align-content: start; gap: 24px; color: var(--ink); background: var(--paper); border: 1px solid var(--paper); box-shadow: 8px 8px 0 var(--lime); }
+.flashcard-word-row { display: flex; min-height: 56px; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--ink); }
+.flashcard-word-row h4 { margin: 0; overflow-wrap: anywhere; font-family: var(--display); font-size: 34px; letter-spacing: 0; }
+.flashcard-word-row button { display: grid; width: 40px; height: 40px; padding: 0; flex: 0 0 auto; place-items: center; color: var(--ink); background: var(--lime); border: 1px solid var(--ink); cursor: pointer; }
+.flashcard > div:not(.flashcard-word-row) { display: grid; grid-template-columns: 54px 1fr; gap: 14px; }
+.flashcard > div > span { color: var(--coral-dark); font: 700 11px/1.6 var(--mono); }
+.flashcard > div > p { margin: 0; overflow-wrap: anywhere; font-size: 16px; line-height: 1.7; }
+.flashcard-navigation { display: grid; margin-top: 20px; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px; }
+.flashcard-navigation > button { display: inline-flex; min-height: 40px; padding: 0 13px; align-items: center; gap: 5px; color: var(--paper); background: transparent; border: 1px solid #5e5a54; cursor: pointer; }
+.flashcard-navigation > button:disabled { opacity: .3; cursor: not-allowed; }
+.flashcard-navigation > div { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; }
+.flashcard-navigation > div button { width: 9px; height: 9px; padding: 0; background: #5e5a54; border: 0; cursor: pointer; }
+.flashcard-navigation > div button.active { background: var(--lime); box-shadow: 0 0 0 2px var(--ink), 0 0 0 3px var(--lime); }
+.flashcard-study > .review-token-usage { justify-content: center; margin-top: 16px; }
 .review-hint, .review-error { margin: 14px 0 0; font-size: 12px; }
 .review-hint { color: #aaa7a1; }
 .review-error { padding: 10px 12px; color: #ffd8cb; background: #5f2116; border: 1px solid var(--coral); }
@@ -534,7 +556,7 @@
   .dictionary-engine span { font-size: 10px; }
   .dictionary-engine select { width: 100%; text-align: right; }
   .library-actions { display: grid !important; grid-template-columns: 1fr 1fr; width: 100%; }
-  .clear-all-button, .reset-mastery-button, .review-start-button, .passage-start-button { width: 100%; min-width: 0; }
+  .clear-all-button, .reset-mastery-button, .review-start-button, .passage-start-button, .flashcard-start-button { width: 100%; min-width: 0; }
   .review-selection-bar { position: sticky; top: 106px; z-index: 4; padding: 8px 10px; align-items: stretch; flex-direction: column; gap: 7px; box-shadow: 0 4px 0 color-mix(in srgb, var(--ink) 12%, transparent); }
   .review-selection-bar button { width: 100%; justify-content: center; }
   .word-list { scroll-margin-top: 196px; }
@@ -546,6 +568,13 @@
   .passage-result-actions { align-items: stretch; flex-direction: column; }
   .passage-speak-button { width: 100%; }
   .passage-result-heading .review-token-usage { flex-wrap: wrap; }
+  .flashcard-actions .generate-review-button { width: 100%; }
+  .flashcard { min-height: 310px; padding: 22px 18px; box-shadow: 5px 5px 0 var(--lime); }
+  .flashcard-word-row h4 { font-size: 29px; }
+  .flashcard > div:not(.flashcard-word-row) { grid-template-columns: 1fr; gap: 5px; }
+  .flashcard-navigation { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .flashcard-navigation > div { grid-column: 1 / -1; grid-row: 1; }
+  .flashcard-navigation > button { justify-content: center; }
   .pagination { grid-template-columns: 1fr; justify-items: center; gap: 10px; padding-block: 14px; }
   .pagination > span, .pagination small { justify-self: center; }
   .generate-review-button { grid-column: auto; }

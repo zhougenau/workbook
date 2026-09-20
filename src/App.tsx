@@ -17,6 +17,7 @@ import {
   Download,
   Edit3,
   ExternalLink,
+  Layers3,
   LogIn,
   LogOut,
   MessageCircle,
@@ -45,6 +46,7 @@ import { synchronize } from './sync'
 import { ReviewPanel } from './ReviewPanel'
 import type { MasteryChange } from './review'
 import { PassagePanel } from './PassagePanel'
+import { FlashcardPanel } from './FlashcardPanel'
 import { WordChatDialog } from './WordChatDialog'
 import './App.css'
 
@@ -188,6 +190,7 @@ function App() {
   const [dictionaryEngine, setDictionaryEngine] = useState<DictionaryEngine>(loadDictionaryEngine)
   const [reviewSelecting, setReviewSelecting] = useState(false)
   const [passageSelecting, setPassageSelecting] = useState(false)
+  const [flashcardSelecting, setFlashcardSelecting] = useState(false)
   const [selectedWordIds, setSelectedWordIds] = useState<string[]>([])
   const [quickReviewRequest, setQuickReviewRequest] = useState(0)
   const [chatWord, setChatWord] = useState<VocabularyEntry | null>(null)
@@ -208,6 +211,7 @@ function App() {
       return
     }
     setPassageSelecting(false)
+    setFlashcardSelecting(false)
     setQuickReviewRequest(0)
     setReviewSelecting((active) => !active)
     setSelectedWordIds([])
@@ -220,8 +224,22 @@ function App() {
       return
     }
     setReviewSelecting(false)
+    setFlashcardSelecting(false)
     setQuickReviewRequest(0)
     setPassageSelecting((active) => !active)
+    setSelectedWordIds([])
+  }
+
+  const toggleFlashcardSelection = () => {
+    if (!user) {
+      setCloudOpen(true)
+      setSyncMessage('AI 卡片需要登录，以便服务端安全调用 DeepSeek。')
+      return
+    }
+    setReviewSelecting(false)
+    setPassageSelecting(false)
+    setQuickReviewRequest(0)
+    setFlashcardSelecting((active) => !active)
     setSelectedWordIds([])
   }
 
@@ -239,6 +257,7 @@ function App() {
       return
     }
     setPassageSelecting(false)
+    setFlashcardSelecting(false)
     setSelectedWordIds([id])
     setReviewSelecting(true)
     setQuickReviewRequest((request) => request + 1)
@@ -380,18 +399,20 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!reviewSelecting && !passageSelecting) return
+    if (!reviewSelecting && !passageSelecting && !flashcardSelecting) return
     const quickReview = quickReviewRequest > 0
     if (!quickReview && !window.matchMedia('(max-width: 520px)').matches) return
     const frame = window.requestAnimationFrame(() => {
       const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       const target = quickReview
         ? document.getElementById('review-panel')
-        : passageSelecting ? document.getElementById('passage-panel') : reviewWordList.current
+        : passageSelecting
+          ? document.getElementById('passage-panel')
+          : flashcardSelecting ? document.getElementById('flashcard-panel') : reviewWordList.current
       target?.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' })
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [reviewSelecting, passageSelecting, quickReviewRequest])
+  }, [reviewSelecting, passageSelecting, flashcardSelecting, quickReviewRequest])
 
   const scheduleSync = (activeUser: User) => {
     if (syncTimer.current) window.clearTimeout(syncTimer.current)
@@ -527,6 +548,7 @@ function App() {
       setSelectedWordIds([])
       setReviewSelecting(false)
       setPassageSelecting(false)
+      setFlashcardSelecting(false)
       editingIdRef.current = null
       setEditingId(null)
       if (user) scheduleSync(user)
@@ -672,6 +694,7 @@ function App() {
     setCloudOpen(false)
     setReviewSelecting(false)
     setPassageSelecting(false)
+    setFlashcardSelecting(false)
     setSelectedWordIds([])
   }
 
@@ -700,7 +723,7 @@ function App() {
   const masteredCount = entries.filter((entry) => entry.mastery === 5).length
   const learningCount = entries.filter((entry) => entry.mastery > 0 && entry.mastery < 5).length
   const selectedWords = entries.filter((entry) => selectedWordIds.includes(entry.id))
-  const selectingWords = reviewSelecting || passageSelecting
+  const selectingWords = reviewSelecting || passageSelecting || flashcardSelecting
   const totalPages = Math.max(1, Math.ceil(visibleEntries.length / pageSize))
   const activePage = Math.min(currentPage, totalPages)
   const pageStart = (activePage - 1) * pageSize
@@ -875,6 +898,10 @@ function App() {
                 {passageSelecting ? <X size={17} /> : <BookText size={17} />}
                 {passageSelecting ? '取消短文' : 'AI 短文'}
               </button>
+              <button className={`flashcard-start-button ${flashcardSelecting ? 'active' : ''}`} type="button" onClick={toggleFlashcardSelection} disabled={!entries.length}>
+                {flashcardSelecting ? <X size={17} /> : <Layers3 size={17} />}
+                {flashcardSelecting ? '取消卡片' : 'AI 卡片'}
+              </button>
             </div>
           </div>
 
@@ -945,6 +972,17 @@ function App() {
                   }}
                 />
               )}
+              {flashcardSelecting && (
+                <FlashcardPanel
+                  allWords={entries}
+                  selectedWords={selectedWords}
+                  prepareWords={prepareReviewWords}
+                  onClose={() => {
+                    setFlashcardSelecting(false)
+                    setSelectedWordIds([])
+                  }}
+                />
+              )}
             </>
           )}
 
@@ -961,7 +999,7 @@ function App() {
                   <div className={`word-index ${selectingWords ? 'review-select-index' : ''}`}>
                     {selectingWords ? (
                       <label title={`选择 ${entry.term}`}>
-                        <input type="checkbox" checked={selectedWordIds.includes(entry.id)} onChange={() => toggleSelectedWord(entry.id)} aria-label={`选择 ${entry.term} 进行${passageSelecting ? '短文生成' : '复习'}`} />
+                        <input type="checkbox" checked={selectedWordIds.includes(entry.id)} onChange={() => toggleSelectedWord(entry.id)} aria-label={`选择 ${entry.term} 进行${passageSelecting ? '短文生成' : flashcardSelecting ? '卡片学习' : '复习'}`} />
                         <span><Check size={15} /></span>
                       </label>
                     ) : String(pageStart + index + 1).padStart(2, '0')}
