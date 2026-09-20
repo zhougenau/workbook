@@ -380,6 +380,8 @@
 .flashcard-navigation { display: grid; margin-top: 20px; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px; }
 .flashcard-navigation > button { display: inline-flex; min-height: 40px; padding: 0 13px; align-items: center; gap: 5px; color: var(--paper); background: transparent; border: 1px solid #5e5a54; cursor: pointer; }
 .flashcard-navigation > button:disabled { opacity: .3; cursor: not-allowed; }
+.flashcard-navigation > .flashcard-test-button { color: var(--ink); font-weight: 700; background: var(--lime); border-color: var(--lime); }
+.flashcard-navigation > .flashcard-test-button:hover { background: var(--coral); border-color: var(--coral); }
 .flashcard-navigation > div { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; }
 .flashcard-navigation > div button { width: 9px; height: 9px; padding: 0; background: #5e5a54; border: 0; cursor: pointer; }
 .flashcard-navigation > div button.active { background: var(--lime); box-shadow: 0 0 0 2px var(--ink), 0 0 0 3px var(--lime); }

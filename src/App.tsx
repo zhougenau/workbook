@@ -977,6 +977,12 @@ function App() {
                   allWords={entries}
                   selectedWords={selectedWords}
                   prepareWords={prepareReviewWords}
+                  onComplete={(wordIds) => {
+                    setFlashcardSelecting(false)
+                    setSelectedWordIds(wordIds)
+                    setReviewSelecting(true)
+                    setQuickReviewRequest((request) => request + 1)
+                  }}
                   onClose={() => {
                     setFlashcardSelecting(false)
                     setSelectedWordIds([])

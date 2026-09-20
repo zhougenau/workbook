@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Layers3, LoaderCircle, RotateCcw, Volume2, X } from 'lucide-react'
+import { BrainCircuit, ChevronLeft, ChevronRight, Layers3, LoaderCircle, RotateCcw, Volume2, X } from 'lucide-react'
 import { generateFlashcards, type Flashcard, type GeneratedFlashcards } from './flashcards'
 import type { VocabularyEntry } from './storage'
 
@@ -7,6 +7,7 @@ type FlashcardPanelProps = {
   allWords: VocabularyEntry[]
   selectedWords: VocabularyEntry[]
   prepareWords: () => Promise<Record<string, string>>
+  onComplete: (wordIds: string[]) => void
   onClose: () => void
 }
 
@@ -33,8 +34,9 @@ function readFlashcard(card: Flashcard, showUnsupportedMessage = false) {
   window.speechSynthesis.speak(utterance)
 }
 
-export function FlashcardPanel({ allWords, selectedWords, prepareWords, onClose }: FlashcardPanelProps) {
+export function FlashcardPanel({ allWords, selectedWords, prepareWords, onComplete, onClose }: FlashcardPanelProps) {
   const [result, setResult] = useState<GeneratedFlashcards | null>(null)
+  const [studiedWordIds, setStudiedWordIds] = useState<string[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -58,6 +60,7 @@ export function FlashcardPanel({ allWords, selectedWords, prepareWords, onClose 
       request.signal.throwIfAborted()
       const wordIds = sourceWords.map((word) => idRemap[word.id] ?? word.id)
       setResult(await generateFlashcards(wordIds, request.signal))
+      setStudiedWordIds(wordIds)
       setActiveIndex(0)
     } catch (cause) {
       if (!request.signal.aborted) setError(cause instanceof Error ? cause.message : 'AI 卡片生成失败')
@@ -124,7 +127,11 @@ export function FlashcardPanel({ allWords, selectedWords, prepareWords, onClose 
           <div className="flashcard-navigation">
             <button type="button" onClick={() => setActiveIndex((index) => Math.max(0, index - 1))} disabled={activeIndex === 0}><ChevronLeft size={18} />上一张</button>
             <div>{result.cards.map((item, index) => <button key={item.wordId} type="button" className={index === activeIndex ? 'active' : ''} onClick={() => setActiveIndex(index)} aria-label={`查看第 ${index + 1} 张：${item.word}`} aria-pressed={index === activeIndex} />)}</div>
-            <button type="button" onClick={() => setActiveIndex((index) => Math.min(result.cards.length - 1, index + 1))} disabled={activeIndex === result.cards.length - 1}>下一张<ChevronRight size={18} /></button>
+            {activeIndex === result.cards.length - 1 ? (
+              <button className="flashcard-test-button" type="button" onClick={() => onComplete(studiedWordIds)} disabled={!studiedWordIds.length}>开始 AI 测试<BrainCircuit size={18} /></button>
+            ) : (
+              <button type="button" onClick={() => setActiveIndex((index) => Math.min(result.cards.length - 1, index + 1))}>下一张<ChevronRight size={18} /></button>
+            )}
           </div>
           <dl className="review-token-usage" aria-label="本次 AI Token 用量">
             <div><dt>输入</dt><dd>{result.tokenUsage.promptTokens.toLocaleString()}</dd></div>
