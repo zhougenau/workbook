@@ -110,6 +110,16 @@ export function FlashcardPanel({ allWords, selectedWords, prepareWords, onClose 
             </div>
             <div><span>释义</span><p>{card.meaning}</p></div>
             <div><span>用法</span><p lang="en">{card.usage}</p></div>
+            <div className="flashcard-supplement">
+              <span>补充</span>
+              <div className="flashcard-supplement-content">
+                <dl>
+                  <div><dt>同义词</dt><dd>{card.synonyms.length ? card.synonyms.map((word) => <b key={word}>{word}</b>) : '暂无常用同义词'}</dd></div>
+                  <div><dt>反义词</dt><dd>{card.antonyms.length ? card.antonyms.map((word) => <b key={word}>{word}</b>) : '暂无常用反义词'}</dd></div>
+                </dl>
+                <p><strong>记忆方法</strong>{card.memoryTip}</p>
+              </div>
+            </div>
           </article>
           <div className="flashcard-navigation">
             <button type="button" onClick={() => setActiveIndex((index) => Math.max(0, index - 1))} disabled={activeIndex === 0}><ChevronLeft size={18} />上一张</button>

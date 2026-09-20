@@ -5,6 +5,9 @@ export type Flashcard = {
   word: string
   meaning: string
   usage: string
+  synonyms: string[]
+  antonyms: string[]
+  memoryTip: string
 }
 
 export type GeneratedFlashcards = {
@@ -41,7 +44,10 @@ function parseFlashcards(value: unknown): GeneratedFlashcards {
       return typeof item.wordId === 'string' && item.wordId.trim() &&
         typeof item.word === 'string' && item.word.trim() &&
         typeof item.meaning === 'string' && item.meaning.trim() &&
-        typeof item.usage === 'string' && item.usage.trim()
+        typeof item.usage === 'string' && item.usage.trim() &&
+        Array.isArray(item.synonyms) && item.synonyms.every((word) => typeof word === 'string' && word.trim()) &&
+        Array.isArray(item.antonyms) && item.antonyms.every((word) => typeof word === 'string' && word.trim()) &&
+        typeof item.memoryTip === 'string' && item.memoryTip.trim()
     }) ||
     !usage ||
     !Number.isInteger(usage.promptTokens) ||
