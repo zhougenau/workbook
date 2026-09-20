@@ -1050,6 +1050,7 @@ function App() {
 
       <footer>
         <span>词屿 · 本地单词本</span>
+        <span>v{__APP_VERSION__} · 更新于 {new Date(__APP_UPDATED_AT__).toLocaleString('zh-CN')} · {__APP_COMMIT__}</span>
         <span>{user ? '数据已加密传输并同步到云端' : '当前数据保存在这台设备上'}</span>
       </footer>
       {chatWord && (
