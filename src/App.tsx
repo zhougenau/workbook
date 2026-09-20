@@ -182,7 +182,7 @@ function App() {
   const [pageSize, setPageSize] = useState(10)
   const [currentPage, setCurrentPage] = useState(1)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editDraft, setEditDraft] = useState({ meaning: '', note: '' })
+  const [editDraft, setEditDraft] = useState({ term: '', meaning: '', note: '' })
   const [message, setMessage] = useState('')
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const [dictionaryEngine, setDictionaryEngine] = useState<DictionaryEngine>(loadDictionaryEngine)
@@ -487,7 +487,7 @@ function App() {
       syncTimer.current = null
       syncPendingAfterEdit.current = true
     }
-    setEditDraft({ meaning: entry.meaning, note: entry.note })
+    setEditDraft({ term: entry.term, meaning: entry.meaning, note: entry.note })
     editingIdRef.current = entry.id
     setEditingId(entry.id)
     setSyncState(user ? 'local' : syncState)
@@ -495,7 +495,12 @@ function App() {
   }
 
   const finishEditing = async (id: string) => {
-    const draft = { meaning: editDraft.meaning.trim(), note: editDraft.note.trim() }
+    const draft = {
+      term: editDraft.term.trim(),
+      meaning: editDraft.meaning.trim(),
+      note: editDraft.note.trim(),
+    }
+    if (!draft.term) return
     await updateEntry(id, draft)
     editingIdRef.current = null
     setEditingId(null)
@@ -988,9 +993,10 @@ function App() {
                     </div>
                     {editingId === entry.id ? (
                       <div className="edit-fields">
+                        <input value={editDraft.term} onChange={(event) => setEditDraft((draft) => ({ ...draft, term: event.target.value }))} placeholder="单词或短语" aria-label={`${entry.term} 的单词或短语`} />
                         <input value={editDraft.meaning} onChange={(event) => setEditDraft((draft) => ({ ...draft, meaning: event.target.value }))} placeholder="补充释义" aria-label={`${entry.term} 的释义`} />
                         <input value={editDraft.note} onChange={(event) => setEditDraft((draft) => ({ ...draft, note: event.target.value }))} placeholder="补充笔记或例句" aria-label={`${entry.term} 的笔记`} />
-                        <button type="button" onClick={() => void finishEditing(entry.id)}><Check size={16} />完成</button>
+                        <button type="button" onClick={() => void finishEditing(entry.id)} disabled={!editDraft.term.trim()}><Check size={16} />完成</button>
                       </div>
                     ) : (
                       <div className="definition">
