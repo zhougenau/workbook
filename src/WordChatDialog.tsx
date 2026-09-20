@@ -15,6 +15,9 @@ const suggestions = [
   '这个词和哪些近义词容易混淆？',
 ]
 
+const maxChatMessages = 24
+const maxMessageLength = 2000
+
 export function WordChatDialog({ word, prepareWord, onClose }: WordChatDialogProps) {
   const [messages, setMessages] = useState<WordChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -47,7 +50,7 @@ export function WordChatDialog({ word, prepareWord, onClose }: WordChatDialogPro
     if (!cleanQuestion || loading) return
 
     const userMessage: WordChatMessage = { role: 'user', content: cleanQuestion }
-    const nextMessages = [...messages, userMessage].slice(-12)
+    const nextMessages = [...messages, userMessage].slice(-maxChatMessages)
     setMessages(nextMessages)
     setInput('')
     setError('')
@@ -62,7 +65,7 @@ export function WordChatDialog({ word, prepareWord, onClose }: WordChatDialogPro
       setCanonicalWordId(wordId)
       const result = await sendWordChatMessage(wordId, nextMessages, request.signal)
       const assistantMessage: WordChatMessage = { role: 'assistant', content: result.reply }
-      setMessages((current) => [...current, assistantMessage].slice(-12))
+      setMessages((current) => [...current, assistantMessage].slice(-maxChatMessages))
     } catch (cause) {
       if (!request.signal.aborted) {
         setError(cause instanceof Error ? cause.message : 'AI 对话暂时不可用')
@@ -121,7 +124,7 @@ export function WordChatDialog({ word, prepareWord, onClose }: WordChatDialogPro
           <textarea
             ref={inputRef}
             value={input}
-            onChange={(event) => setInput(event.target.value.slice(0, 1000))}
+            onChange={(event) => setInput(event.target.value.slice(0, maxMessageLength))}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault()
@@ -133,7 +136,7 @@ export function WordChatDialog({ word, prepareWord, onClose }: WordChatDialogPro
             rows={2}
           />
           <button type="submit" disabled={!input.trim() || loading} aria-label="发送问题"><Send size={18} /></button>
-          <small>{input.length}/1000 · Enter 发送，Shift + Enter 换行</small>
+          <small>{input.length}/{maxMessageLength} · Enter 发送，Shift + Enter 换行</small>
         </form>
       </section>
     </div>

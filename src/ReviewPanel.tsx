@@ -60,8 +60,9 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
       const wordIds = reviewWordIds ?? canonicalWords
         .map((word) => word.id)
         .sort(() => Math.random() - 0.5)
-        .slice(0, 20)
-      const result = await generateReview(wordIds, questionCount, difficulty, request.signal)
+        .slice(0, 60)
+      const effectiveQuestionCount = Math.max(questionCount, wordIds.length)
+      const result = await generateReview(wordIds, effectiveQuestionCount, difficulty, request.signal)
       setQuizWords(canonicalWords)
       setQuiz(result)
       setCurrentIndex(0)
@@ -105,13 +106,13 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
           <div>
             <span className="review-kicker"><BrainCircuit size={16} />DEEPSEEK AI REVIEW</span>
             <h3 id="review-panel-title">生成选择题</h3>
-            <p>已选择 {selectedWords.length} 个单词，AI 将生成 5–10 道四选一题{selectedWords.length > 20 ? '，本轮随机抽取 20 个词' : ''}。</p>
+            <p>已选择 {selectedWords.length} 个单词，每个题源词至少覆盖 1 道题{selectedWords.length > 60 ? '，本轮随机抽取 60 个词' : ''}。</p>
           </div>
           <button className="review-close" type="button" onClick={onClose} title="退出复习选择" aria-label="退出复习选择"><X size={18} /></button>
         </div>
         <div className="review-settings">
           <label>
-            <span>题目数量</span>
+            <span>最低题目数量</span>
             <select value={questionCount} onChange={(event) => setQuestionCount(Number(event.target.value))}>
               {[5, 6, 7, 8, 9, 10].map((count) => <option key={count} value={count}>{count} 题</option>)}
             </select>

@@ -5,6 +5,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const maxChatMessages = 24
+const maxMessageLength = 2000
+
 type ChatMessage = {
   role: 'user' | 'assistant'
   content: string
@@ -33,7 +36,7 @@ function parseRequest(value: unknown): ChatRequest | null {
   if (!value || typeof value !== 'object') return null
   const request = value as Record<string, unknown>
   const wordId = typeof request.wordId === 'string' ? request.wordId.trim() : ''
-  if (!wordId || !Array.isArray(request.messages) || request.messages.length < 1 || request.messages.length > 12) return null
+  if (!wordId || !Array.isArray(request.messages) || request.messages.length < 1 || request.messages.length > maxChatMessages) return null
 
   const messages: ChatMessage[] = []
   for (const item of request.messages) {
@@ -43,7 +46,7 @@ function parseRequest(value: unknown): ChatRequest | null {
       (message.role !== 'user' && message.role !== 'assistant') ||
       typeof message.content !== 'string' ||
       !message.content.trim() ||
-      message.content.length > 1000
+      message.content.length > maxMessageLength
     ) return null
     messages.push({ role: message.role, content: message.content.trim() })
   }
@@ -65,7 +68,8 @@ function systemPrompt(word: VocabularyRow) {
 3. 优先使用清晰中文解释；英文例句必须自然，并附简洁中文翻译。
 4. 不编造不确定的词源或用法；存在语域、地区或正式程度差异时明确指出。
 5. 根据对话上下文提供具体、可执行的学习建议，避免空泛鼓励。
-6. 回复只使用普通纯文本，可分段或使用“1. 2. 3.”数字列表；禁止 Markdown 标记、表格、标题符号、引用符号和代码围栏，不使用 JSON。`
+6. 回复只使用普通纯文本，可分段或使用“1. 2. 3.”数字列表；禁止 Markdown 标记、表格、标题符号、引用符号和代码围栏，不使用 JSON。
+7. 单次回复不超过 ${maxMessageLength} 个字符。`
 }
 
 async function callDeepSeek(apiKey: string, word: VocabularyRow, messages: ChatMessage[]) {
@@ -86,7 +90,7 @@ async function callDeepSeek(apiKey: string, word: VocabularyRow, messages: ChatM
         ],
         thinking: { type: 'disabled' },
         stream: false,
-        max_tokens: 1200,
+        max_tokens: 2500,
         temperature: 0.5,
       }),
       signal: controller.signal,
@@ -100,7 +104,7 @@ async function callDeepSeek(apiKey: string, word: VocabularyRow, messages: ChatM
     if (typeof reply !== 'string' || !reply.trim()) throw new Error('DeepSeek 返回了空内容')
     const usage = payload?.usage
     return {
-      reply: reply.trim(),
+      reply: reply.trim().slice(0, maxMessageLength),
       tokenUsage: {
         promptTokens: Number.isInteger(usage?.prompt_tokens) ? usage.prompt_tokens : 0,
         completionTokens: Number.isInteger(usage?.completion_tokens) ? usage.completion_tokens : 0,
