@@ -17,6 +17,8 @@ const difficultyLabels: Record<ReviewDifficulty, string> = {
   advanced: '挑战',
 }
 
+const correctAnswerAdvanceDelay = 2000
+
 function TokenUsage({ quiz }: { quiz: ReviewQuiz }) {
   return (
     <dl className="review-token-usage" aria-label="本次 AI Token 用量">
@@ -42,6 +44,7 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
   const [quizWords, setQuizWords] = useState<VocabularyEntry[]>(selectedWords)
   const autoStartRequested = useRef(false)
   const activeRequest = useRef<AbortController | null>(null)
+  const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const createQuiz = async (reviewWordIds?: string[]) => {
     if ((!selectedWords.length && !reviewWordIds?.length) || loading) return
@@ -91,7 +94,10 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
     startAutomaticQuiz()
   }, [autoStart])
 
-  useEffect(() => () => activeRequest.current?.abort(), [])
+  useEffect(() => () => {
+    activeRequest.current?.abort()
+    if (advanceTimer.current) clearTimeout(advanceTimer.current)
+  }, [])
 
   const restart = () => {
     setCurrentIndex(0)
@@ -157,16 +163,37 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
     }
   }
 
-  const finishReview = () => {
+  const finishReview = (finalAnswers = answers) => {
     if (masteryApplied) {
       setCompleted(true)
       return
     }
-    const changes = calculateMasteryChanges(quiz, answers, quizWords, difficulty)
+    const changes = calculateMasteryChanges(quiz, finalAnswers, quizWords, difficulty)
     const changed = changes.filter((change) => change.nextLevel !== change.previousLevel)
     setMasteryChanges(changes)
     setCompleted(true)
     if (changed.length) void saveMasteryChanges(changed)
+  }
+
+  const goToNextQuestion = () => {
+    if (advanceTimer.current) {
+      clearTimeout(advanceTimer.current)
+      advanceTimer.current = null
+    }
+    if (currentIndex === quiz.questions.length - 1) finishReview()
+    else setCurrentIndex((index) => index + 1)
+  }
+
+  const answerQuestion = (answerIndex: number) => {
+    const nextAnswers = { ...answers, [currentIndex]: answerIndex }
+    setAnswers(nextAnswers)
+    if (answerIndex !== quiz.questions[currentIndex].correctIndex) return
+
+    advanceTimer.current = setTimeout(() => {
+      advanceTimer.current = null
+      if (currentIndex === quiz.questions.length - 1) finishReview(nextAnswers)
+      else setCurrentIndex((index) => index + 1)
+    }, correctAnswerAdvanceDelay)
   }
 
   if (completed) {
@@ -243,7 +270,7 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
               key={`${question.id}-${option}`}
               className={state}
               type="button"
-              onClick={() => setAnswers((current) => ({ ...current, [currentIndex]: index }))}
+              onClick={() => answerQuestion(index)}
               disabled={answered}
             >
               <span>{String.fromCharCode(65 + index)}</span>{option}
@@ -263,7 +290,7 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
           className="review-next"
           type="button"
           disabled={!answered}
-          onClick={() => currentIndex === quiz.questions.length - 1 ? finishReview() : setCurrentIndex((index) => index + 1)}
+          onClick={goToNextQuestion}
         >
           {currentIndex === quiz.questions.length - 1 ? '查看结果' : '下一题'}<ArrowRight size={17} />
         </button>
