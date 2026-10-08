@@ -745,6 +745,19 @@ function App() {
     })
   }
 
+  const renderPagination = (position: 'top' | 'bottom') => (
+    <nav className={`pagination pagination-${position}`} aria-label={`单词${position === 'top' ? '顶部' : '底部'}分页导航`}>
+      <span>第 <strong>{activePage}</strong> / {totalPages} 页</span>
+      <div>
+        <button type="button" onClick={() => setCurrentPage(1)} disabled={activePage === 1} aria-label="最前页" title="最前页"><ChevronsLeft size={18} /></button>
+        <button type="button" onClick={() => setCurrentPage(Math.max(1, activePage - 1))} disabled={activePage === 1} aria-label="上一页" title="上一页"><ChevronLeft size={18} /></button>
+        <button type="button" onClick={() => setCurrentPage(Math.min(totalPages, activePage + 1))} disabled={activePage === totalPages} aria-label="下一页" title="下一页"><ChevronRight size={18} /></button>
+        <button type="button" onClick={() => setCurrentPage(totalPages)} disabled={activePage === totalPages} aria-label="最后页" title="最后页"><ChevronsRight size={18} /></button>
+      </div>
+      <small>显示 {pageStart + 1}–{Math.min(pageStart + pageSize, visibleEntries.length)}，共 {visibleEntries.length} 个</small>
+    </nav>
+  )
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -992,6 +1005,7 @@ function App() {
             </>
           )}
 
+          {!!visibleEntries.length && renderPagination('top')}
           {!visibleEntries.length ? (
             <div className="empty-state">
               <span><BookOpen size={28} /></span>
@@ -1077,18 +1091,7 @@ function App() {
               ))}
             </div>
           )}
-          {!!visibleEntries.length && (
-            <nav className="pagination" aria-label="单词分页导航">
-              <span>第 <strong>{activePage}</strong> / {totalPages} 页</span>
-              <div>
-                <button type="button" onClick={() => setCurrentPage(1)} disabled={activePage === 1} aria-label="最前页" title="最前页"><ChevronsLeft size={18} /></button>
-                <button type="button" onClick={() => setCurrentPage(Math.max(1, activePage - 1))} disabled={activePage === 1} aria-label="上一页" title="上一页"><ChevronLeft size={18} /></button>
-                <button type="button" onClick={() => setCurrentPage(Math.min(totalPages, activePage + 1))} disabled={activePage === totalPages} aria-label="下一页" title="下一页"><ChevronRight size={18} /></button>
-                <button type="button" onClick={() => setCurrentPage(totalPages)} disabled={activePage === totalPages} aria-label="最后页" title="最后页"><ChevronsRight size={18} /></button>
-              </div>
-              <small>显示 {pageStart + 1}–{Math.min(pageStart + pageSize, visibleEntries.length)}，共 {visibleEntries.length} 个</small>
-            </nav>
-          )}
+          {!!visibleEntries.length && renderPagination('bottom')}
         </section>
       </main>
 
