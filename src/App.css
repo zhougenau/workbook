@@ -240,7 +240,7 @@
 .sync-message.error { color: var(--coral-dark); }
 .intro { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 48px; padding: 88px 0 72px; }
 .eyebrow { margin: 0 0 18px; color: var(--coral-dark); font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 0; }
-.app-shell h1 { max-width: 800px; margin: 0; font-family: var(--display); font-size: clamp(48px, 7vw, 88px); font-weight: 800; line-height: .98; letter-spacing: 0; }
+.app-shell h1 { max-width: 800px; margin: 0; color: var(--ink); font-family: var(--display); font-size: clamp(48px, 7vw, 88px); font-weight: 800; line-height: .98; letter-spacing: 0; }
 .stats { display: grid; grid-template-columns: repeat(3, 106px); border: 1px solid var(--ink); }
 .stats button { display: flex; flex-direction: column; min-height: 102px; padding: 18px; justify-content: space-between; text-align: left; background: transparent; border: 0; border-right: 1px solid var(--ink); cursor: pointer; }
 .stats button:last-child { border-right: 0; }
