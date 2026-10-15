@@ -1,9 +1,11 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import type { AiProvider } from '@wordbook/core'
 import { ArrowRight, BrainCircuit, Check, LoaderCircle, RotateCcw, X } from 'lucide-react'
 import { calculateMasteryChanges, generateReview, type MasteryChange, type ReviewDifficulty, type ReviewQuiz } from './review'
 import type { VocabularyEntry } from './storage'
 
 type ReviewPanelProps = {
+  provider: AiProvider
   selectedWords: VocabularyEntry[]
   prepareWords: () => Promise<Record<string, string>>
   applyMasteryChanges: (changes: MasteryChange[]) => Promise<void>
@@ -29,7 +31,7 @@ function TokenUsage({ quiz }: { quiz: ReviewQuiz }) {
   )
 }
 
-export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, onClose, autoStart = false }: ReviewPanelProps) {
+export function ReviewPanel({ provider, selectedWords, prepareWords, applyMasteryChanges, onClose, autoStart = false }: ReviewPanelProps) {
   const [questionCount, setQuestionCount] = useState(5)
   const [difficulty, setDifficulty] = useState<ReviewDifficulty>('basic')
   const [quiz, setQuiz] = useState<ReviewQuiz | null>(null)
@@ -65,7 +67,7 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
         .sort(() => Math.random() - 0.5)
         .slice(0, 60)
       const effectiveQuestionCount = Math.max(questionCount, wordIds.length)
-      const result = await generateReview(wordIds, effectiveQuestionCount, difficulty, request.signal)
+      const result = await generateReview(wordIds, effectiveQuestionCount, difficulty, request.signal, provider)
       setQuizWords(canonicalWords)
       setQuiz(result)
       setCurrentIndex(0)
@@ -110,7 +112,7 @@ export function ReviewPanel({ selectedWords, prepareWords, applyMasteryChanges, 
       <section id="review-panel" className="review-panel" aria-labelledby="review-panel-title">
         <div className="review-panel-heading">
           <div>
-            <span className="review-kicker"><BrainCircuit size={16} />DEEPSEEK AI REVIEW</span>
+            <span className="review-kicker"><BrainCircuit size={16} />AI REVIEW</span>
             <h3 id="review-panel-title">生成选择题</h3>
             <p>已选择 {selectedWords.length} 个单词，每个题源词至少覆盖 1 道题{selectedWords.length > 60 ? '，本轮随机抽取 60 个词' : ''}。</p>
           </div>

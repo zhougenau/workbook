@@ -1,3 +1,4 @@
+import type { AiProvider } from '@wordbook/core'
 import { getAccessToken, supabase } from './supabase'
 import type { ReviewDifficulty, ReviewQuestion, ReviewQuestionType, ReviewQuiz } from '@wordbook/core'
 
@@ -63,12 +64,13 @@ export async function generateReview(
   questionCount: number,
   difficulty: ReviewDifficulty,
   signal?: AbortSignal,
+  provider?: AiProvider,
 ) {
   if (!supabase) throw new Error('尚未配置 Supabase')
   const accessToken = await getAccessToken()
 
   const { data, error } = await supabase.functions.invoke('generate-review', {
-    body: { wordIds, questionCount, difficulty },
+    body: { wordIds, questionCount, difficulty, provider },
     headers: { Authorization: `Bearer ${accessToken}` },
     signal,
   })

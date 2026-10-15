@@ -1,6 +1,6 @@
 const SUPABASE_FUNCTIONS_URL = 'https://gvgztuwklhlhzorcoouh.supabase.co/functions/v1'
 const SESSION_KEY = 'wordbook-mini:session:v1'
-const { parseGeneratedFlashcards } = require('../vendor/wordbook-core')
+const { parseGeneratedFlashcards, parseWordChatResponse } = require('../vendor/wordbook-core')
 
 function request(path, options = {}) {
   return new Promise((resolve, reject) => {
@@ -138,16 +138,20 @@ async function requestAi(path, data) {
   }
 }
 
-function generatePassage(wordIds, length) {
-  return requestAi('/generate-passage', { wordIds, length })
+function generatePassage(wordIds, length, provider) {
+  return requestAi('/generate-passage', { wordIds, length, provider })
 }
 
-function generateReview(wordIds, questionCount, difficulty) {
-  return requestAi('/generate-review', { wordIds, questionCount, difficulty })
+function generateReview(wordIds, questionCount, difficulty, provider) {
+  return requestAi('/generate-review', { wordIds, questionCount, difficulty, provider })
 }
 
-async function generateFlashcards(wordIds) {
-  return parseGeneratedFlashcards(await requestAi('/generate-flashcards', { wordIds }))
+async function generateFlashcards(wordIds, provider) {
+  return parseGeneratedFlashcards(await requestAi('/generate-flashcards', { wordIds, provider }))
+}
+
+async function sendWordChatMessage(wordId, messages, provider) {
+  return parseWordChatResponse(await requestAi('/word-chat', { wordId, messages, provider }))
 }
 
 async function generateSpeech(text) {
@@ -167,5 +171,6 @@ module.exports = {
   linkWechatAccount,
   loadSession,
   loginWithWechat,
+  sendWordChatMessage,
   synchronizeEntries,
 }

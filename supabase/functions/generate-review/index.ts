@@ -1,4 +1,6 @@
 import { resolveOwner } from '../_shared/resolve-owner.ts'
+import { callAiProvider, hasAiProviderKey, parseAiProvider } from '../_shared/ai-provider.ts'
+import type { AiProvider } from '../_shared/ai-provider.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,6 +21,7 @@ type ReviewRequest = {
   wordIds: string[]
   questionCount: number
   difficulty: string
+  provider: AiProvider
 }
 
 type TokenUsage = {
@@ -42,7 +45,9 @@ function parseRequest(value: unknown): ReviewRequest | null {
     : []
   const questionCount = Number(request.questionCount)
   const difficulty = String(request.difficulty)
+  const provider = parseAiProvider(request.provider)
   if (
+    !provider ||
     wordIds.length < 1 ||
     wordIds.length > 60 ||
     !Number.isInteger(questionCount) ||
@@ -51,7 +56,7 @@ function parseRequest(value: unknown): ReviewRequest | null {
     questionCount < wordIds.length ||
     !allowedDifficulties.has(difficulty)
   ) return null
-  return { wordIds, questionCount, difficulty }
+  return { wordIds, questionCount, difficulty, provider }
 }
 
 function validateQuiz(value: unknown, request: ReviewRequest, words: VocabularyRow[]) {
@@ -99,49 +104,6 @@ JSON 格式示例：
 {"title":"今日词汇复习","questions":[{"id":"q1","type":"meaning","wordId":"输入中的 UUID","word":"example","prompt":"请选择 example 的正确释义。","options":["示例","危险","旅程","决定"],"correctIndex":0,"explanation":"example 表示示例。"}]}`
 }
 
-async function callDeepSeek(apiKey: string, request: ReviewRequest, words: VocabularyRow[]) {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 90_000)
-  try {
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'deepseek-v4-flash',
-        messages: [
-          { role: 'system', content: systemPrompt(request.questionCount, request.difficulty) },
-          { role: 'user', content: `请基于以下词汇数据生成题目，并返回 JSON：\n${JSON.stringify({ words })}` },
-        ],
-        response_format: { type: 'json_object' },
-        thinking: { type: 'disabled' },
-        stream: false,
-        max_tokens: 12000,
-      }),
-      signal: controller.signal,
-    })
-
-    if (!response.ok) {
-      const details = await response.text()
-      throw new Error(`DeepSeek API ${response.status}: ${details.slice(0, 300)}`)
-    }
-    const payload = await response.json()
-    const content = payload?.choices?.[0]?.message?.content
-    if (typeof content !== 'string' || !content.trim()) throw new Error('DeepSeek 返回了空内容')
-    const usage = payload?.usage
-    const tokenUsage: TokenUsage = {
-      promptTokens: Number.isInteger(usage?.prompt_tokens) ? usage.prompt_tokens : 0,
-      completionTokens: Number.isInteger(usage?.completion_tokens) ? usage.completion_tokens : 0,
-      totalTokens: Number.isInteger(usage?.total_tokens) ? usage.total_tokens : 0,
-    }
-    return { content, tokenUsage }
-  } finally {
-    clearTimeout(timeout)
-  }
-}
-
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (request.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405)
@@ -152,8 +114,7 @@ Deno.serve(async (request) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  const deepSeekApiKey = Deno.env.get('DEEPSEEK_API_KEY')
-  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey || !deepSeekApiKey) {
+  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
     return jsonResponse({ error: 'AI 服务尚未完成配置' }, 503)
   }
 
@@ -174,6 +135,7 @@ Deno.serve(async (request) => {
   }
   const reviewRequest = parseRequest(body)
   if (!reviewRequest) return jsonResponse({ error: '请选择 1–60 个单词；题目数量需为 5–60，且不少于单词数量' }, 422)
+  if (!hasAiProviderKey(reviewRequest.provider)) return jsonResponse({ error: '所选 AI 接入商尚未配置' }, 503)
 
   const { data, error } = await owner.admin
     .from('vocabulary_entries')
@@ -192,7 +154,10 @@ Deno.serve(async (request) => {
   const tokenUsage: TokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const result = await callDeepSeek(deepSeekApiKey, reviewRequest, words)
+      const result = await callAiProvider(reviewRequest.provider, [
+        { role: 'system', content: systemPrompt(reviewRequest.questionCount, reviewRequest.difficulty) },
+        { role: 'user', content: `请基于以下词汇数据生成题目，并返回 JSON：\n${JSON.stringify({ words })}` },
+      ], { timeout: 90_000, maxTokens: 12000, json: true })
       tokenUsage.promptTokens += result.tokenUsage.promptTokens
       tokenUsage.completionTokens += result.tokenUsage.completionTokens
       tokenUsage.totalTokens += result.tokenUsage.totalTokens

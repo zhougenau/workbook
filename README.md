@@ -129,6 +129,25 @@ VITE_SUPABASE_ANON_KEY=your-anon-publishable-key
 
 不要把 Supabase `service_role` 密钥放入前端环境变量。客户端只能使用 Publishable Key 或旧版 Anon Key，数据访问由 `schema.sql` 中的 RLS 策略保护。
 
+### 选择 AI 接入商
+
+Web 词库工具栏和小程序 AI 学习工坊都可选择 DeepSeek 或通义千问；两端共用 Core 的选项与默认值，但选择分别保存在各设备本地。旧客户端未传接入商时默认 DeepSeek；选定通义千问后，服务端只调用通义千问，不会静默切换。AI Key 仅保存在 Supabase Secrets 中。
+
+在阿里云百炼创建中国内地地域的 API Key 后，在项目根目录设置：
+
+```powershell
+$secureKey = Read-Host "DashScope API Key" -AsSecureString
+$plainKey = [Net.NetworkCredential]::new('', $secureKey).Password
+npx supabase secrets set "DASHSCOPE_API_KEY=$plainKey"
+Remove-Variable secureKey, plainKey
+npx supabase functions deploy generate-review
+npx supabase functions deploy generate-passage
+npx supabase functions deploy generate-flashcards
+npx supabase functions deploy word-chat
+```
+
+服务端使用阿里云百炼中国内地的兼容接口与 `qwen-flash`；应在部署后分别验证题目、短文、卡片和对话的返回质量，并确认 Supabase 所在地域到接口的连通性。未配置所选接入商的密钥时函数返回 503，不会暴露密钥给客户端。
+
 ### 配置 DeepSeek AI 复习
 
 AI 复习采用服务端调用：浏览器只把所选词条 ID、题目数量和难度发给 Supabase Edge Function；函数验证当前 Supabase 用户，通过 RLS 读取该用户的已同步词条，再调用 `deepseek-v4-flash`。DeepSeek API Key 不会下发到浏览器。

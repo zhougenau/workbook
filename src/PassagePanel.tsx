@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import type { AiProvider } from '@wordbook/core'
 import { BookText, Check, LoaderCircle, RotateCcw, Square, Volume2, X } from 'lucide-react'
 import { generatePassage, type GeneratedPassage, type PassageLength } from './passage'
 import type { VocabularyEntry } from './storage'
 
 type PassagePanelProps = {
+  provider: AiProvider
   selectedWords: VocabularyEntry[]
   prepareWords: () => Promise<Record<string, string>>
   onClose: () => void
@@ -46,7 +48,7 @@ function highlightWords(passage: string, words: string[]) {
   return parts
 }
 
-export function PassagePanel({ selectedWords, prepareWords, onClose }: PassagePanelProps) {
+export function PassagePanel({ provider, selectedWords, prepareWords, onClose }: PassagePanelProps) {
   const [chosenLength, setChosenLength] = useState<PassageLength | null>(null)
   const [result, setResult] = useState<GeneratedPassage | null>(null)
   const [loading, setLoading] = useState(false)
@@ -106,7 +108,7 @@ export function PassagePanel({ selectedWords, prepareWords, onClose }: PassagePa
       const idRemap = await prepareWords()
       request.signal.throwIfAborted()
       const wordIds = selectedWords.map((word) => idRemap[word.id] ?? word.id)
-      setResult(await generatePassage(wordIds, length, request.signal))
+      setResult(await generatePassage(wordIds, length, request.signal, provider))
     } catch (cause) {
       if (!request.signal.aborted) setError(cause instanceof Error ? cause.message : 'AI 短文生成失败')
     } finally {
@@ -121,7 +123,7 @@ export function PassagePanel({ selectedWords, prepareWords, onClose }: PassagePa
     <section id="passage-panel" className="review-panel passage-panel" aria-labelledby="passage-panel-title">
       <div className="review-panel-heading">
         <div>
-          <span className="review-kicker"><BookText size={16} />DEEPSEEK AI PASSAGE</span>
+            <span className="review-kicker"><BookText size={16} />AI PASSAGE</span>
           <h3 id="passage-panel-title">用所选单词生成短文</h3>
           <p>已选择 {selectedWords.length} 个单词。AI 会将每个词自然地写入同一篇英文短文。</p>
         </div>

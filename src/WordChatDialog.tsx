@@ -1,24 +1,17 @@
 import { type FormEvent, useEffect, useEffectEvent, useRef, useState } from 'react'
+import { appendWordChatQuestion, appendWordChatReply, MAX_WORD_CHAT_MESSAGE_LENGTH, WORD_CHAT_SUGGESTIONS, type AiProvider, type WordChatMessage } from '@wordbook/core'
 import { LoaderCircle, MessageCircle, Send, Sparkles, X } from 'lucide-react'
 import type { VocabularyEntry } from './storage'
-import { sendWordChatMessage, type WordChatMessage } from './wordChat'
+import { sendWordChatMessage } from './wordChat'
 
 type WordChatDialogProps = {
+  provider: AiProvider
   word: VocabularyEntry
   prepareWord: (id: string) => Promise<string>
   onClose: () => void
 }
 
-const suggestions = [
-  '帮我拆解词根和记忆方法',
-  '给我三个不同场景的例句',
-  '这个词和哪些近义词容易混淆？',
-]
-
-const maxChatMessages = 24
-const maxMessageLength = 2000
-
-export function WordChatDialog({ word, prepareWord, onClose }: WordChatDialogProps) {
+export function WordChatDialog({ provider, word, prepareWord, onClose }: WordChatDialogProps) {
   const [messages, setMessages] = useState<WordChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -49,8 +42,7 @@ export function WordChatDialog({ word, prepareWord, onClose }: WordChatDialogPro
     const cleanQuestion = question.trim()
     if (!cleanQuestion || loading) return
 
-    const userMessage: WordChatMessage = { role: 'user', content: cleanQuestion }
-    const nextMessages = [...messages, userMessage].slice(-maxChatMessages)
+    const nextMessages = appendWordChatQuestion(messages, cleanQuestion)
     setMessages(nextMessages)
     setInput('')
     setError('')
@@ -63,9 +55,8 @@ export function WordChatDialog({ word, prepareWord, onClose }: WordChatDialogPro
       const wordId = canonicalWordId ?? await prepareWord(word.id)
       request.signal.throwIfAborted()
       setCanonicalWordId(wordId)
-      const result = await sendWordChatMessage(wordId, nextMessages, request.signal)
-      const assistantMessage: WordChatMessage = { role: 'assistant', content: result.reply }
-      setMessages((current) => [...current, assistantMessage].slice(-maxChatMessages))
+      const result = await sendWordChatMessage(wordId, nextMessages, request.signal, provider)
+      setMessages((current) => appendWordChatReply(current, result.reply))
     } catch (cause) {
       if (!request.signal.aborted) {
         setError(cause instanceof Error ? cause.message : 'AI 对话暂时不可用')
@@ -103,7 +94,7 @@ export function WordChatDialog({ word, prepareWord, onClose }: WordChatDialogPro
               <Sparkles size={24} />
               <p>可以问我这个词的含义、用法、词源、近义词区别，或请我制定记忆方案。</p>
               <div className="word-chat-suggestions">
-                {suggestions.map((suggestion) => (
+                {WORD_CHAT_SUGGESTIONS.map((suggestion) => (
                   <button key={suggestion} type="button" onClick={() => void ask(suggestion)}>{suggestion}</button>
                 ))}
               </div>
@@ -124,7 +115,7 @@ export function WordChatDialog({ word, prepareWord, onClose }: WordChatDialogPro
           <textarea
             ref={inputRef}
             value={input}
-            onChange={(event) => setInput(event.target.value.slice(0, maxMessageLength))}
+            onChange={(event) => setInput(event.target.value.slice(0, MAX_WORD_CHAT_MESSAGE_LENGTH))}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault()
@@ -136,7 +127,7 @@ export function WordChatDialog({ word, prepareWord, onClose }: WordChatDialogPro
             rows={2}
           />
           <button type="submit" disabled={!input.trim() || loading} aria-label="发送问题"><Send size={18} /></button>
-          <small>{input.length}/{maxMessageLength} · Enter 发送，Shift + Enter 换行</small>
+          <small>{input.length}/{MAX_WORD_CHAT_MESSAGE_LENGTH} · Enter 发送，Shift + Enter 换行</small>
         </form>
       </section>
     </div>

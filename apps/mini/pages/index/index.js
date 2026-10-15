@@ -7,9 +7,12 @@ const {
   linkWechatAccount,
   loadSession,
   loginWithWechat,
+  sendWordChatMessage,
   synchronizeEntries,
 } = require('../../utils/api')
 const {
+  AI_PROVIDERS,
+  DEFAULT_AI_PROVIDER,
   DEFAULT_PAGE_SIZE,
   MASTERY_FILTER_OPTIONS,
   PAGE_SIZE_OPTIONS,
@@ -18,15 +21,24 @@ const {
   calculateMasteryChanges,
   clampFlashcardIndex,
   filterAndSortVocabularyEntries,
+  normalizeAiProvider,
   paginate,
   selectFlashcardWords,
+  appendWordChatQuestion,
+  appendWordChatReply,
+  MAX_WORD_CHAT_MESSAGE_LENGTH,
+  WORD_CHAT_SUGGESTIONS,
 } = require('../../vendor/wordbook-core')
 const { createEntry, loadAllEntries, loadEntries, saveEntries } = require('../../utils/storage')
-const { destroySpeech, playSpeech, stopSpeech } = require('../../utils/speech')
+const { destroySpeech, playSpeech, setSpeechRate, stopSpeech } = require('../../utils/speech')
 
 const masteryLabels = ['未掌握', '刚认识', '有印象', '基本理解', '较熟练', '已掌握']
 const masteryFilterLabels = ['全部程度', '学习中 · 1–4', ...masteryLabels.map((label, index) => `${index} · ${label}`)]
 const sortLabels = ['最近添加', '最早添加', '字母顺序', '掌握度优先']
+const speechRates = [0.8, 1, 1.25]
+const speechRateLabels = ['慢 0.8×', '正常 1×', '快 1.25×']
+const SPEECH_RATE_KEY = 'wordbook-mini:speech-rate:v1'
+const AI_PROVIDER_KEY = 'wordbook-mini:ai-provider:v1'
 
 function decorateEntries(entries, selectedIds = []) {
   const selected = new Set(selectedIds)
@@ -72,6 +84,12 @@ Page({
     term: '',
     meaning: '',
     note: '',
+    editingId: '',
+    editTerm: '',
+    editMeaning: '',
+    editNote: '',
+    editMastery: 0,
+    editError: '',
     analysisSource: '',
     message: '',
     healthStatus: 'idle',
@@ -84,16 +102,33 @@ Page({
     linkStatus: 'idle',
     linkMessage: '在 Web 词屿生成一次性绑定码',
     aiSelectedIds: [],
+    selectionMode: false,
+    aiProviders: AI_PROVIDERS,
+    aiProviderIndex: 0,
+    aiProvider: DEFAULT_AI_PROVIDER,
     aiLength: 'short',
     aiDifficulty: 'basic',
     aiStatus: 'idle',
     aiMessage: '从词库选择单词，生成专属学习材料',
+    chatWord: null,
+    chatMessages: [],
+    chatInput: '',
+    chatLoading: false,
+    chatError: '',
+    chatSuggestions: WORD_CHAT_SUGGESTIONS,
+    chatMaxLength: MAX_WORD_CHAT_MESSAGE_LENGTH,
+    chatScrollTarget: '',
     passage: null,
     flashcards: null,
     flashcardWordIds: [],
     flashcardIndex: 0,
     currentFlashcard: null,
     speechStatus: 'idle',
+    speechText: '',
+    speechSource: '',
+    speechWordId: '',
+    speechRateIndex: 1,
+    speechRateLabels,
     quiz: null,
     quizWords: [],
     quizAnswers: {},
@@ -108,10 +143,18 @@ Page({
   },
 
   onLoad() {
+    this.chatRequestId = 0
     this.speechCache = Object.create(null)
     this.speechRequestId = 0
+    const savedSpeechRateIndex = speechRates.indexOf(Number(wx.getStorageSync(SPEECH_RATE_KEY)))
+    const speechRateIndex = savedSpeechRateIndex < 0 ? 1 : savedSpeechRateIndex
+    const aiProvider = normalizeAiProvider(wx.getStorageSync(AI_PROVIDER_KEY))
+    setSpeechRate(speechRates[speechRateIndex])
     const session = loadSession()
     this.setData({
+      speechRateIndex,
+      aiProvider,
+      aiProviderIndex: AI_PROVIDERS.findIndex((provider) => provider.id === aiProvider),
       loginStatus: session ? 'ok' : 'idle',
       loginMessage: session ? '已恢复微信登录会话' : '尚未连接微信身份',
       userId: session && session.userId ? session.userId : '',
@@ -121,6 +164,7 @@ Page({
   },
 
   onUnload() {
+    this.chatRequestId += 1
     if (this.syncTimer) clearTimeout(this.syncTimer)
     if (this.advanceTimer) clearTimeout(this.advanceTimer)
     this.speechRequestId += 1
@@ -182,6 +226,14 @@ Page({
     }, () => this.refreshEntries())
   },
 
+  handleSpeechRateChange(event) {
+    const speechRateIndex = Number(event.detail.value)
+    if (!Number.isInteger(speechRateIndex) || !speechRates[speechRateIndex]) return
+    setSpeechRate(speechRates[speechRateIndex])
+    wx.setStorageSync(SPEECH_RATE_KEY, speechRates[speechRateIndex])
+    this.setData({ speechRateIndex })
+  },
+
   handlePageChange(event) {
     const { action } = event.currentTarget.dataset
     let currentPage = this.data.currentPage
@@ -227,12 +279,91 @@ Page({
     }, () => this.refreshEntries())
   },
 
+  beginWordSelection(event) {
+    const { id } = event.currentTarget.dataset
+    if (!this.data.entries.some((entry) => entry.id === id)) return
+    this.setData({ selectionMode: true })
+    if (this.data.aiSelectedIds.includes(id)) return
+    this.toggleAiWord(event)
+  },
+
+  finishWordSelection() {
+    this.setData({ selectionMode: false })
+  },
+
+  preventWordSelection() {},
+
   chooseAiLength(event) {
     this.setData({ aiLength: event.currentTarget.dataset.length })
   },
 
   chooseAiDifficulty(event) {
     this.setData({ aiDifficulty: event.currentTarget.dataset.difficulty })
+  },
+
+  chooseAiProvider(event) {
+    const provider = AI_PROVIDERS[Number(event.detail.value)]
+    if (!provider) return
+    wx.setStorageSync(AI_PROVIDER_KEY, provider.id)
+    this.setData({ aiProvider: provider.id, aiProviderIndex: Number(event.detail.value) })
+  },
+
+  openWordChat(event) {
+    const word = this.data.entries.find((entry) => entry.id === event.currentTarget.dataset.id)
+    if (!word) return
+    this.chatRequestId += 1
+    this.setData({
+      chatWord: word,
+      chatMessages: [],
+      chatInput: '',
+      chatLoading: false,
+      chatError: '',
+      chatScrollTarget: '',
+    })
+  },
+
+  closeWordChat() {
+    this.chatRequestId += 1
+    this.setData({ chatWord: null, chatMessages: [], chatInput: '', chatLoading: false, chatError: '' })
+  },
+
+  handleChatInput(event) {
+    this.setData({ chatInput: event.detail.value.slice(0, MAX_WORD_CHAT_MESSAGE_LENGTH) })
+  },
+
+  askChatSuggestion(event) {
+    this.askWordChat(event.currentTarget.dataset.question)
+  },
+
+  sendChatInput() {
+    this.askWordChat(this.data.chatInput)
+  },
+
+  async askWordChat(question) {
+    const cleanQuestion = String(question || '').trim().slice(0, MAX_WORD_CHAT_MESSAGE_LENGTH)
+    if (!cleanQuestion || !this.data.chatWord || this.data.chatLoading) return
+    const requestId = ++this.chatRequestId
+    const wordId = this.data.chatWord.id
+    const messages = appendWordChatQuestion(this.data.chatMessages, cleanQuestion)
+    this.setData({ chatMessages: messages, chatInput: '', chatError: '', chatLoading: true, chatScrollTarget: 'chat-bottom' })
+    try {
+      if (!loadSession()) throw new Error('请先连接微信身份')
+      if (!loadEntries().some((entry) => entry.id === wordId && entry.syncStatus === 'synced')) {
+        await this.synchronize(false)
+        if (this.data.syncStatus !== 'ok') throw new Error(this.data.syncMessage || '词条同步失败')
+      }
+      if (requestId !== this.chatRequestId) return
+      const result = await sendWordChatMessage(wordId, messages, this.data.aiProvider)
+      if (requestId !== this.chatRequestId) return
+      this.setData({
+        chatMessages: appendWordChatReply(this.data.chatMessages, result.reply),
+        chatScrollTarget: 'chat-bottom',
+      })
+    } catch (error) {
+      if (requestId === this.chatRequestId) this.setData({ chatError: error.message || 'AI 对话暂时不可用' })
+    } finally {
+      if (requestId === this.chatRequestId) this.setData({ chatLoading: false })
+    }
   },
 
   async prepareAiWords() {
@@ -253,7 +384,7 @@ Page({
     })
     try {
       const wordIds = await this.prepareAiWords()
-      const passage = await generatePassage(wordIds, this.data.aiLength)
+      const passage = await generatePassage(wordIds, this.data.aiLength, this.data.aiProvider)
       this.setData({ aiStatus: 'ok', aiMessage: '短文已生成', passage })
     } catch (error) {
       this.setData({ aiStatus: 'error', aiMessage: error.message || 'AI 短文生成失败' })
@@ -276,7 +407,7 @@ Page({
     try {
       const wordIds = await this.prepareAiWords()
       const questionCount = Math.max(5, wordIds.length)
-      const result = await generateReview(wordIds, questionCount, this.data.aiDifficulty)
+      const result = await generateReview(wordIds, questionCount, this.data.aiDifficulty, this.data.aiProvider)
       const quiz = decorateQuiz(result)
       const selected = new Set(wordIds)
       this.setData({
@@ -292,10 +423,24 @@ Page({
         quizCorrectCount: 0,
         masteryChanges: [],
         masteryMessage: '',
-      })
+      }, () => wx.pageScrollTo({ selector: '#ai-review-result', duration: 300 }))
     } catch (error) {
       this.setData({ aiStatus: 'error', aiMessage: error.message || 'AI 复习题生成失败' })
     }
+  },
+
+  startSingleWordReview(event) {
+    const { id } = event.currentTarget.dataset
+    if (this.data.aiStatus === 'checking' || this.data.selectionMode) return
+    if (!this.data.entries.some((entry) => entry.id === id)) return
+    if (!loadSession()) {
+      wx.showToast({ title: '请先连接微信身份', icon: 'none' })
+      return
+    }
+    this.setData({ aiSelectedIds: [id], aiDifficulty: 'basic', quiz: null, currentQuestion: null }, () => {
+      wx.pageScrollTo({ selector: '#ai-review-section', duration: 300 })
+      this.createReview()
+    })
   },
 
   async createFlashcards() {
@@ -313,7 +458,7 @@ Page({
       if (!sourceWords.length) throw new Error('请先在词库收录单词')
       await this.synchronize(false)
       const wordIds = sourceWords.map((word) => word.id)
-      const flashcards = await generateFlashcards(wordIds)
+      const flashcards = await generateFlashcards(wordIds, this.data.aiProvider)
       this.setData({
         aiStatus: 'ok',
         aiMessage: `学习卡片已生成 · 共 ${flashcards.cards.length} 张`,
@@ -321,7 +466,7 @@ Page({
         flashcardWordIds: wordIds,
         flashcardIndex: 0,
         currentFlashcard: flashcards.cards[0],
-      })
+      }, () => this.speakFlashcard())
     } catch (error) {
       this.setData({ aiStatus: 'error', aiMessage: error.message || 'AI 卡片生成失败' })
     }
@@ -332,20 +477,34 @@ Page({
     if (!flashcards || !flashcards.cards.length) return
     const flashcardIndex = clampFlashcardIndex(index, flashcards.cards.length)
     this.stopFlashcardSpeech()
-    this.setData({ flashcardIndex, currentFlashcard: flashcards.cards[flashcardIndex] })
+    this.setData({ flashcardIndex, currentFlashcard: flashcards.cards[flashcardIndex] }, () => this.speakFlashcard())
   },
 
   async speakFlashcard() {
     const card = this.data.currentFlashcard
-    if (!card || this.data.speechStatus === 'loading') return
-    if (this.data.speechStatus === 'playing') {
+    if (card) await this.speakText(`${card.word}. ${card.usage}`, 'flashcard', '')
+  },
+
+  async speakWord(event) {
+    const entry = this.data.entries.find((item) => item.id === event.currentTarget.dataset.id)
+    if (!entry) return
+    const example = entry.note.split(/\r?\n/).map((line) => line.trim())
+      .find((line) => /[A-Za-z]/.test(line) && !/[\u3400-\u9fff]/.test(line))
+    const fullText = example ? `${entry.term}. ${example}` : entry.term
+    await this.speakText(fullText.length <= 500 ? fullText : entry.term, 'word', entry.id)
+  },
+
+  async speakText(text, source, wordId) {
+    if (!text) return
+    if (this.data.speechText === text && this.data.speechSource === source && this.data.speechStatus === 'loading') return
+    if (this.data.speechText === text && this.data.speechSource === source && this.data.speechStatus === 'playing') {
       this.stopFlashcardSpeech()
       return
     }
 
-    const text = `${card.word}. ${card.usage}`
     const requestId = ++this.speechRequestId
-    this.setData({ speechStatus: 'loading' })
+    stopSpeech()
+    this.setData({ speechStatus: 'loading', speechText: text, speechSource: source, speechWordId: wordId })
     try {
       let audio = this.speechCache[text]
       if (!audio) {
@@ -355,16 +514,19 @@ Page({
       }
       if (requestId !== this.speechRequestId) return
       await playSpeech(audio, {
-        onEnded: () => this.setData({ speechStatus: 'idle' }),
+        onEnded: () => {
+          if (requestId === this.speechRequestId) this.setData({ speechStatus: 'idle', speechText: '', speechSource: '', speechWordId: '' })
+        },
         onError: () => {
-          this.setData({ speechStatus: 'error' })
+          if (requestId !== this.speechRequestId) return
+          this.setData({ speechStatus: 'error', speechText: '', speechSource: '', speechWordId: '' })
           wx.showToast({ title: '播放失败，请重试', icon: 'none' })
         },
       })
       if (requestId === this.speechRequestId) this.setData({ speechStatus: 'playing' })
     } catch (error) {
       if (requestId !== this.speechRequestId) return
-      this.setData({ speechStatus: 'error' })
+      this.setData({ speechStatus: 'error', speechText: '', speechSource: '', speechWordId: '' })
       wx.showToast({ title: error.message || '发音失败，请重试', icon: 'none' })
     }
   },
@@ -372,7 +534,7 @@ Page({
   stopFlashcardSpeech() {
     this.speechRequestId += 1
     stopSpeech()
-    if (this.data.speechStatus !== 'idle') this.setData({ speechStatus: 'idle' })
+    if (this.data.speechStatus !== 'idle' || this.data.speechText) this.setData({ speechStatus: 'idle', speechText: '', speechSource: '', speechWordId: '' })
   },
 
   navigateFlashcard(event) {
@@ -546,19 +708,64 @@ Page({
     this.queueSync()
   },
 
-  changeMastery(event) {
-    const { id } = event.currentTarget.dataset
+  editEntry(event) {
+    const entry = this.data.entries.find((item) => item.id === event.currentTarget.dataset.id)
+    if (!entry) return
+    this.setData({
+      editingId: entry.id,
+      editTerm: entry.term,
+      editMeaning: entry.meaning,
+      editNote: entry.note,
+      editMastery: entry.mastery,
+      editError: '',
+    })
+  },
+
+  handleEditInput(event) {
+    this.setData({ [event.currentTarget.dataset.field]: event.detail.value, editError: '' })
+  },
+
+  adjustEditMastery(event) {
     const delta = Number(event.currentTarget.dataset.delta)
-    const now = new Date().toISOString()
-    const entries = loadAllEntries().map((entry) => entry.id === id
+    this.setData({ editMastery: Math.max(0, Math.min(5, this.data.editMastery + delta)) })
+  },
+
+  cancelEdit() {
+    this.setData({ editingId: '', editError: '' })
+  },
+
+  saveEdit() {
+    const { editingId } = this.data
+    if (!editingId) return
+    const term = this.data.editTerm.trim()
+    if (!term) {
+      this.setData({ editError: '请先填写单词或短语' })
+      return
+    }
+    const normalizedTerm = term.toLocaleLowerCase()
+    if (this.data.entries.some((entry) => entry.id !== editingId && entry.term.toLocaleLowerCase() === normalizedTerm)) {
+      this.setData({ editError: `“${term}” 已经在词库中` })
+      return
+    }
+
+    const entries = loadAllEntries()
+    if (!entries.some((entry) => entry.id === editingId && !entry.deletedAt)) {
+      this.setData({ editError: '词条已删除，请重新打开词库' })
+      return
+    }
+    const updatedAt = new Date().toISOString()
+    saveEntries(entries.map((entry) => entry.id === editingId
       ? {
           ...entry,
-          mastery: Math.max(0, Math.min(5, entry.mastery + delta)),
-          updatedAt: now,
+          term,
+          meaning: this.data.editMeaning.trim(),
+          note: this.data.editNote.trim(),
+          mastery: this.data.editMastery,
+          updatedAt,
           syncStatus: 'pending',
         }
-      : entry)
-    saveEntries(entries)
+      : entry))
+    this.setData({ editingId: '', editError: '', message: `已更新 “${term}”` })
     this.refreshEntries()
     this.queueSync()
   },

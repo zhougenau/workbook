@@ -1,4 +1,20 @@
 Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+//#region src/ai-provider.ts
+var AI_PROVIDERS = [{
+	id: "deepseek",
+	label: "DeepSeek"
+}, {
+	id: "qwen",
+	label: "通义千问"
+}];
+var DEFAULT_AI_PROVIDER = "deepseek";
+function isAiProvider(value) {
+	return AI_PROVIDERS.some((provider) => provider.id === value);
+}
+function normalizeAiProvider(value) {
+	return isAiProvider(value) ? value : DEFAULT_AI_PROVIDER;
+}
+//#endregion
 //#region src/flashcards.ts
 function parseGeneratedFlashcards(value) {
 	if (!value || typeof value !== "object") throw new Error("AI 返回了无法识别的卡片格式");
@@ -254,6 +270,38 @@ function filterAndSortVocabularyEntries(entries, options = {}) {
 	});
 }
 //#endregion
+//#region src/word-chat.ts
+var WORD_CHAT_SUGGESTIONS = [
+	"帮我拆解词根和记忆方法",
+	"给我三个不同场景的例句",
+	"这个词和哪些近义词容易混淆？"
+];
+var MAX_WORD_CHAT_MESSAGES = 24;
+var MAX_WORD_CHAT_MESSAGE_LENGTH = 2e3;
+function appendWordChatQuestion(messages, question) {
+	const content = question.trim();
+	if (!content || content.length > 2e3) throw new Error("对话内容不正确或超过长度限制");
+	return [...messages, {
+		role: "user",
+		content
+	}].slice(-24);
+}
+function appendWordChatReply(messages, reply) {
+	return [...messages, {
+		role: "assistant",
+		content: reply
+	}].slice(-24);
+}
+function parseWordChatResponse(value) {
+	if (!value || typeof value !== "object") throw new Error("AI 返回了无法识别的对话内容");
+	const result = value;
+	const usage = result.tokenUsage;
+	if (typeof result.reply !== "string" || !result.reply.trim() || !usage || !Number.isInteger(usage.promptTokens) || !Number.isInteger(usage.completionTokens) || !Number.isInteger(usage.totalTokens)) throw new Error("AI 返回了无法识别的对话内容");
+	return result;
+}
+//#endregion
+exports.AI_PROVIDERS = AI_PROVIDERS;
+exports.DEFAULT_AI_PROVIDER = DEFAULT_AI_PROVIDER;
 exports.DEFAULT_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 exports.MASTERY_FILTER_OPTIONS = MASTERY_FILTER_OPTIONS;
 exports.MASTERY_MAX = MASTERY_MAX;
@@ -262,22 +310,30 @@ exports.MAX_MEANING_LENGTH = MAX_MEANING_LENGTH;
 exports.MAX_NOTE_LENGTH = MAX_NOTE_LENGTH;
 exports.MAX_SYNC_ENTRIES = MAX_SYNC_ENTRIES;
 exports.MAX_TERM_LENGTH = MAX_TERM_LENGTH;
+exports.MAX_WORD_CHAT_MESSAGES = MAX_WORD_CHAT_MESSAGES;
+exports.MAX_WORD_CHAT_MESSAGE_LENGTH = MAX_WORD_CHAT_MESSAGE_LENGTH;
 exports.PAGE_SIZE_OPTIONS = PAGE_SIZE_OPTIONS;
 exports.UUID_V4_PATTERN = UUID_V4_PATTERN;
 exports.VOCABULARY_SORT_OPTIONS = VOCABULARY_SORT_OPTIONS;
+exports.WORD_CHAT_SUGGESTIONS = WORD_CHAT_SUGGESTIONS;
 exports.analyzeVocabularyText = analyzeVocabularyText;
+exports.appendWordChatQuestion = appendWordChatQuestion;
+exports.appendWordChatReply = appendWordChatReply;
 exports.calculateMasteryChanges = calculateMasteryChanges;
 exports.clampFlashcardIndex = clampFlashcardIndex;
 exports.clampMastery = clampMastery;
 exports.filterAndSortVocabularyEntries = filterAndSortVocabularyEntries;
+exports.isAiProvider = isAiProvider;
 exports.isLegacyVocabularyEntry = isLegacyVocabularyEntry;
 exports.isValidTimestamp = isValidTimestamp;
 exports.isVocabularyEntry = isVocabularyEntry;
 exports.mergeEntriesLastWriteWins = mergeEntriesLastWriteWins;
+exports.normalizeAiProvider = normalizeAiProvider;
 exports.normalizeTerm = normalizeTerm;
 exports.normalizeVocabularyEntry = normalizeVocabularyEntry;
 exports.paginate = paginate;
 exports.parseGeneratedFlashcards = parseGeneratedFlashcards;
+exports.parseWordChatResponse = parseWordChatResponse;
 exports.reconcileDuplicateTerms = reconcileDuplicateTerms;
 exports.selectFlashcardWords = selectFlashcardWords;
 exports.validateSyncEntry = validateSyncEntry;

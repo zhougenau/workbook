@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { BrainCircuit, ChevronLeft, ChevronRight, Layers3, LoaderCircle, RotateCcw, Volume2, X } from 'lucide-react'
-import { clampFlashcardIndex, selectFlashcardWords, type Flashcard, type GeneratedFlashcards } from '@wordbook/core'
+import { clampFlashcardIndex, selectFlashcardWords, type AiProvider, type Flashcard, type GeneratedFlashcards } from '@wordbook/core'
 import { generateFlashcards } from './flashcards'
 import type { VocabularyEntry } from './storage'
 
 type FlashcardPanelProps = {
+  provider: AiProvider
   allWords: VocabularyEntry[]
   selectedWords: VocabularyEntry[]
   prepareWords: () => Promise<Record<string, string>>
@@ -24,7 +25,7 @@ function readFlashcard(card: Flashcard, showUnsupportedMessage = false) {
   window.speechSynthesis.speak(utterance)
 }
 
-export function FlashcardPanel({ allWords, selectedWords, prepareWords, onComplete, onClose }: FlashcardPanelProps) {
+export function FlashcardPanel({ provider, allWords, selectedWords, prepareWords, onComplete, onClose }: FlashcardPanelProps) {
   const [result, setResult] = useState<GeneratedFlashcards | null>(null)
   const [studiedWordIds, setStudiedWordIds] = useState<string[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
@@ -49,7 +50,7 @@ export function FlashcardPanel({ allWords, selectedWords, prepareWords, onComple
       const idRemap = await prepareWords()
       request.signal.throwIfAborted()
       const wordIds = sourceWords.map((word) => idRemap[word.id] ?? word.id)
-      setResult(await generateFlashcards(wordIds, request.signal))
+      setResult(await generateFlashcards(wordIds, request.signal, provider))
       setStudiedWordIds(wordIds)
       setActiveIndex(0)
     } catch (cause) {
@@ -74,7 +75,7 @@ export function FlashcardPanel({ allWords, selectedWords, prepareWords, onComple
     <section id="flashcard-panel" className="review-panel flashcard-panel" aria-labelledby="flashcard-panel-title">
       <div className="review-panel-heading">
         <div>
-          <span className="review-kicker"><Layers3 size={16} />DEEPSEEK AI FLASHCARDS</span>
+          <span className="review-kicker"><Layers3 size={16} />AI FLASHCARDS</span>
           <h3 id="flashcard-panel-title">用单词卡片集中学习</h3>
           <p>{selectedWords.length ? `将为已选择的 ${selectedWords.length} 个单词生成卡片。` : `未选择单词，将从单词本随机抽取 ${Math.min(10, allWords.length)} 个。`}</p>
         </div>

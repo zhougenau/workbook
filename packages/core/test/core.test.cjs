@@ -106,3 +106,24 @@ test('validates flashcards, selects words, and clamps navigation', () => {
   assert.equal(core.clampFlashcardIndex(9, 4), 3)
   assert.equal(core.clampFlashcardIndex(2, 4), 2)
 })
+
+test('shares AI provider choices and restores invalid stored values safely', () => {
+  assert.deepEqual(core.AI_PROVIDERS.map((provider) => provider.id), ['deepseek', 'qwen'])
+  assert.equal(core.normalizeAiProvider('qwen'), 'qwen')
+  assert.equal(core.normalizeAiProvider('unknown'), 'deepseek')
+  assert.equal(core.isAiProvider('unknown'), false)
+})
+
+test('shares word chat history limits and response validation', () => {
+  const history = Array.from({ length: 24 }, (_, index) => ({ role: 'assistant', content: `reply ${index}` }))
+  const next = core.appendWordChatQuestion(history, '  如何使用？  ')
+  assert.equal(next.length, core.MAX_WORD_CHAT_MESSAGES)
+  assert.deepEqual(next.at(-1), { role: 'user', content: '如何使用？' })
+  assert.equal(next[0].content, 'reply 1')
+  assert.deepEqual(core.appendWordChatReply(next, '回答').at(-1), { role: 'assistant', content: '回答' })
+  assert.throws(() => core.appendWordChatQuestion([], ' '.repeat(3)))
+  assert.throws(() => core.appendWordChatQuestion([], 'a'.repeat(2001)))
+  const response = { reply: '回答', tokenUsage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 } }
+  assert.deepEqual(core.parseWordChatResponse(response), response)
+  assert.throws(() => core.parseWordChatResponse({ reply: '', tokenUsage: response.tokenUsage }))
+})

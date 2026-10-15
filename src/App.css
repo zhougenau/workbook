@@ -299,7 +299,7 @@
 .flashcard-start-button { display: inline-flex; min-width: 112px; height: 42px; padding: 0 15px; align-items: center; justify-content: center; gap: 7px; color: var(--ink); font-weight: 700; background: var(--lime); border: 1px solid var(--ink); cursor: pointer; }
 .flashcard-start-button:hover, .flashcard-start-button.active { color: var(--paper); background: var(--ink); }
 .flashcard-start-button:disabled { opacity: .35; cursor: not-allowed; }
-.toolbar { display: grid; grid-template-columns: 1fr auto auto auto; margin-bottom: 24px; border-block: 1px solid var(--ink); }
+.toolbar { display: grid; grid-template-columns: 1fr auto auto auto auto; margin-bottom: 24px; border-block: 1px solid var(--ink); }
 .search-box { display: flex; height: 54px; padding: 0 16px; align-items: center; gap: 10px; border-right: 1px solid var(--ink); }
 .search-box input { min-width: 0; flex: 1; background: transparent; border: 0; outline: 0; }
 .search-box button { display: grid; padding: 4px; place-items: center; background: transparent; border: 0; cursor: pointer; }
@@ -551,7 +551,7 @@
   .toolbar { grid-template-columns: 1fr 1fr; }
   .search-box { grid-column: 1 / -1; border-right: 0; border-bottom: 1px solid var(--ink); }
   .select-wrap { min-width: 0; }
-  .page-size-select { grid-column: 1 / -1; border-top: 1px solid var(--ink); border-right: 0; }
+  .toolbar .select-wrap:nth-child(n+4) { border-top: 1px solid var(--ink); }
   .word-card { grid-template-columns: 34px 1fr; }
   .review-select-index { align-self: start; }
   .word-title-row { gap: 12px; }

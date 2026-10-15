@@ -1,3 +1,4 @@
+import type { AiProvider } from '@wordbook/core'
 import { getAccessToken, supabase } from './supabase'
 
 export type PassageLength = 'short' | 'medium' | 'long'
@@ -43,11 +44,11 @@ function parsePassage(value: unknown): GeneratedPassage {
   return result as GeneratedPassage
 }
 
-export async function generatePassage(wordIds: string[], length: PassageLength, signal?: AbortSignal) {
+export async function generatePassage(wordIds: string[], length: PassageLength, signal?: AbortSignal, provider?: AiProvider) {
   if (!supabase) throw new Error('尚未配置 Supabase')
   const accessToken = await getAccessToken()
   const { data, error } = await supabase.functions.invoke('generate-passage', {
-    body: { wordIds, length },
+    body: { wordIds, length, provider },
     headers: { Authorization: `Bearer ${accessToken}` },
     signal,
   })

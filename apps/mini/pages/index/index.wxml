@@ -98,7 +98,7 @@
     <view wx:if="{{message}}" class="message">{{message}}</view>
   </view>
 
-  <view class="ai-section">
+  <view id="ai-review-section" class="ai-section">
     <view class="section-heading section-heading--library">
       <text class="section-index">02</text>
       <view>
@@ -109,8 +109,14 @@
 
     <view class="ai-toolbar">
       <view class="ai-word-picker">
-        <text class="ai-picker-label">{{entries.length ? '在下方词库勾选本次学习词汇' : '请先在下方收录单词'}}</text>
+        <text class="ai-picker-label">{{entries.length ? '本次学习词汇' : '请先在下方收录单词'}}</text>
         <text class="ai-picker-count">已选 {{aiSelectedIds.length}} / 10</text>
+      </view>
+      <view class="ai-control-row">
+        <text>AI 接入商</text>
+        <picker mode="selector" range="{{aiProviders}}" range-key="label" value="{{aiProviderIndex}}" bindchange="chooseAiProvider" aria-label="AI 接入商">
+          <view class="ai-provider-picker">{{aiProviders[aiProviderIndex].label}} <text>⌄</text></view>
+        </picker>
       </view>
       <view class="ai-control-row">
         <text>短文长度</text>
@@ -152,21 +158,26 @@
     <view wx:if="{{flashcards && currentFlashcard}}" class="flashcard-result">
       <view class="flashcard-result-heading">
         <view>
-          <text class="result-kicker">DEEPSEEK AI FLASHCARDS</text>
+          <text class="result-kicker">AI FLASHCARDS</text>
           <text class="flashcard-progress">{{flashcardIndex + 1}} / {{flashcards.cards.length}}</text>
         </view>
-        <button class="flashcard-close" bindtap="closeFlashcards" aria-label="退出卡片学习">×</button>
+        <view class="flashcard-heading-actions">
+          <picker mode="selector" range="{{speechRateLabels}}" value="{{speechRateIndex}}" bindchange="handleSpeechRateChange" aria-label="朗读语速">
+            <view class="speech-rate-picker speech-rate-picker--dark">语速 {{speechRateLabels[speechRateIndex]}} <text>⌄</text></view>
+          </picker>
+          <button class="flashcard-close" bindtap="closeFlashcards" aria-label="退出卡片学习">×</button>
+        </view>
       </view>
 
       <view class="flashcard-sheet">
         <view class="flashcard-word-row">
           <text class="flashcard-word">{{currentFlashcard.word}}</text>
           <button
-            class="flashcard-speech {{speechStatus === 'playing' ? 'active' : ''}}"
+            class="flashcard-speech {{speechSource === 'flashcard' && speechStatus === 'playing' ? 'active' : ''}}"
             bindtap="speakFlashcard"
-            loading="{{speechStatus === 'loading'}}"
-            aria-label="{{speechStatus === 'playing' ? '停止发音' : '朗读单词和例句'}}"
-          >{{speechStatus === 'playing' ? '停止' : speechStatus === 'loading' ? '加载中' : '发音'}}</button>
+            loading="{{speechSource === 'flashcard' && speechStatus === 'loading'}}"
+            aria-label="{{speechSource === 'flashcard' && speechStatus === 'playing' ? '停止发音' : '朗读单词和例句'}}"
+          >{{speechSource === 'flashcard' && speechStatus === 'playing' ? '停止' : speechSource === 'flashcard' && speechStatus === 'loading' ? '加载中' : '发音'}}</button>
         </view>
         <view class="flashcard-field">
           <text>释义</text>
@@ -224,7 +235,7 @@
       </view>
     </view>
 
-    <view wx:if="{{quiz}}" class="quiz-result">
+    <view wx:if="{{quiz}}" id="ai-review-result" class="quiz-result">
       <view class="quiz-heading">
         <view>
           <text class="result-kicker">AI REVIEW · {{quiz.tokenUsage.totalTokens}} TOKENS</text>
@@ -282,6 +293,7 @@
         <text class="section-title">我的词库</text>
         <text class="section-note">选择单词用于 AI 学习，熟练度从 0 到 5 逐步积累。</text>
       </view>
+      <button wx:if="{{selectionMode}}" class="selection-done" bindtap="finishWordSelection" aria-label="完成选择并保留所选单词">完成</button>
     </view>
 
     <view class="search-box">
@@ -299,6 +311,9 @@
       <picker mode="selector" range="{{pageSizeOptions}}" value="{{pageSizeIndex}}" bindchange="handlePageSizeChange" aria-label="每页显示数量">
         <view class="library-filter-picker">每页 {{pageSize}} 个 <text>⌄</text></view>
       </picker>
+      <picker mode="selector" range="{{speechRateLabels}}" value="{{speechRateIndex}}" bindchange="handleSpeechRateChange" aria-label="朗读语速">
+        <view class="speech-rate-picker">语速 {{speechRateLabels[speechRateIndex]}} <text>⌄</text></view>
+      </picker>
     </view>
 
     <view wx:if="{{filteredEntryCount}}" class="pagination pagination--top">
@@ -315,31 +330,39 @@
     </view>
 
     <view wx:if="{{visibleEntries.length}}" class="word-list">
-      <view wx:for="{{visibleEntries}}" wx:key="id" class="word-row">
+      <view wx:for="{{visibleEntries}}" wx:key="id" class="word-row {{item.aiSelected ? 'word-row--selected' : ''}}" data-id="{{item.id}}" bindlongpress="beginWordSelection" aria-label="{{item.term}}，长按选择用于 AI 学习">
         <checkbox
+          wx:if="{{selectionMode}}"
           class="ai-word-checkbox"
           checked="{{item.aiSelected}}"
           color="#315b47"
           data-id="{{item.id}}"
           bindtap="toggleAiWord"
+          catchlongpress="preventWordSelection"
           aria-label="选择 {{item.term}} 用于 AI 学习"
         />
         <view class="word-main">
-          <text class="word-term">{{item.term}}</text>
+          <view class="word-term-row">
+            <text class="word-term">{{item.term}}</text>
+            <view class="word-tools" catchlongpress="preventWordSelection">
+              <button
+                class="word-speech-button {{speechSource === 'word' && speechWordId === item.id && speechStatus === 'playing' ? 'active' : ''}}"
+                data-id="{{item.id}}"
+                bindtap="speakWord"
+                catchlongpress="preventWordSelection"
+                loading="{{speechSource === 'word' && speechWordId === item.id && speechStatus === 'loading'}}"
+                aria-label="{{speechSource === 'word' && speechWordId === item.id && speechStatus === 'playing' ? '停止朗读 ' + item.term : '朗读 ' + item.term + ' 和例句'}}"
+              >{{speechSource === 'word' && speechWordId === item.id && speechStatus === 'playing' ? '■' : '🔊'}}</button>
+              <button class="word-edit-button" data-id="{{item.id}}" bindtap="editEntry" aria-label="编辑 {{item.term}}">✎</button>
+              <button class="word-chat-button" data-id="{{item.id}}" bindtap="openWordChat" aria-label="和 AI 学习 {{item.term}}">💬</button>
+              <button class="word-test-button" data-id="{{item.id}}" bindtap="startSingleWordReview" disabled="{{selectionMode || aiStatus === 'checking'}}" aria-label="用 {{item.term}} 进行 5 道基础 AI 测试">?</button>
+              <button class="delete-button" data-id="{{item.id}}" bindtap="deleteEntry" aria-label="删除 {{item.term}}">×</button>
+            </view>
+          </view>
           <text class="word-meaning">{{item.meaning || '尚未填写释义'}}</text>
           <text wx:if="{{item.note}}" class="word-note">{{item.note}}</text>
         </view>
-        <view class="word-actions">
-          <view class="mastery-control">
-            <button class="step-button" data-id="{{item.id}}" data-delta="-1" bindtap="changeMastery" disabled="{{item.mastery === 0}}">−</button>
-            <view class="mastery-value">
-              <text>{{item.mastery}}</text>
-              <text>{{item.masteryLabel}}</text>
-            </view>
-            <button class="step-button" data-id="{{item.id}}" data-delta="1" bindtap="changeMastery" disabled="{{item.mastery === 5}}">＋</button>
-          </view>
-          <button class="delete-button" data-id="{{item.id}}" bindtap="deleteEntry" aria-label="删除 {{item.term}}">×</button>
-        </view>
+        <text class="mastery-number" aria-label="熟练度 {{item.mastery}}，满级 5">{{item.mastery}}</text>
       </view>
     </view>
 
@@ -361,5 +384,74 @@
       <text class="empty-title">{{search ? '没有匹配的单词' : '词库还是空的'}}</text>
       <text>{{search ? '换一个关键词试试。' : '从今天遇见的第一个词开始。'}}</text>
     </view>
+  </view>
+</view>
+
+<view wx:if="{{editingId}}" class="word-chat-overlay">
+  <view class="word-chat-mask" bindtap="cancelEdit"></view>
+  <view class="word-edit-panel" role="dialog" aria-label="编辑词条">
+    <view class="word-edit-heading">
+      <text>编辑词条</text>
+      <button bindtap="cancelEdit" aria-label="取消编辑">×</button>
+    </view>
+    <label class="word-edit-field">
+      <text>单词或短语</text>
+      <input value="{{editTerm}}" data-field="editTerm" bindinput="handleEditInput" maxlength="200" placeholder="单词或短语" />
+    </label>
+    <label class="word-edit-field">
+      <text>中文释义</text>
+      <input value="{{editMeaning}}" data-field="editMeaning" bindinput="handleEditInput" maxlength="500" placeholder="补充释义" />
+    </label>
+    <label class="word-edit-field">
+      <text>例句或笔记</text>
+      <textarea value="{{editNote}}" data-field="editNote" bindinput="handleEditInput" maxlength="1000" placeholder="补充笔记或例句" auto-height="false"></textarea>
+    </label>
+    <view class="word-edit-mastery">
+      <text>熟练度</text>
+      <view class="word-edit-stepper">
+        <button data-delta="-1" bindtap="adjustEditMastery" disabled="{{editMastery === 0}}" aria-label="降低熟练度">−</button>
+        <text aria-label="当前熟练度 {{editMastery}}，满级 5">{{editMastery}}</text>
+        <button data-delta="1" bindtap="adjustEditMastery" disabled="{{editMastery === 5}}" aria-label="提高熟练度">＋</button>
+      </view>
+    </view>
+    <text wx:if="{{editError}}" class="word-edit-error">{{editError}}</text>
+    <view class="word-edit-actions">
+      <button bindtap="cancelEdit">取消</button>
+      <button bindtap="saveEdit" disabled="{{!editTerm}}">完成</button>
+    </view>
+  </view>
+</view>
+
+<view wx:if="{{chatWord}}" class="word-chat-overlay">
+  <view class="word-chat-mask" bindtap="closeWordChat"></view>
+  <view class="word-chat-panel" role="dialog" aria-label="和 AI 学习 {{chatWord.term}}">
+    <view class="word-chat-heading">
+      <view class="word-chat-title-group">
+        <text class="word-chat-kicker">AI WORD COACH · {{aiProviders[aiProviderIndex].label}}</text>
+        <text class="word-chat-title">{{chatWord.term}}</text>
+        <text class="word-chat-meaning">{{chatWord.meaning || '围绕这个单词提问'}}</text>
+      </view>
+      <button class="word-chat-close" bindtap="closeWordChat" aria-label="关闭 AI 对话">×</button>
+    </view>
+    <scroll-view class="word-chat-history" scroll-y scroll-into-view="{{chatScrollTarget}}">
+      <view wx:if="{{!chatMessages.length}}" class="word-chat-welcome">
+        <text>从一个问题开始</text>
+        <view class="word-chat-prompts">
+          <button wx:for="{{chatSuggestions}}" wx:key="*this" data-question="{{item}}" bindtap="askChatSuggestion" disabled="{{chatLoading}}">{{item}}</button>
+        </view>
+      </view>
+      <view wx:for="{{chatMessages}}" wx:key="index" class="word-chat-message word-chat-message--{{item.role}}">
+        <text class="word-chat-speaker">{{item.role === 'user' ? '你' : 'AI'}}</text>
+        <text user-select>{{item.content}}</text>
+      </view>
+      <text wx:if="{{chatLoading}}" class="word-chat-pending">AI 正在整理学习建议…</text>
+      <text wx:if="{{chatError}}" class="word-chat-error">{{chatError}}</text>
+      <view id="chat-bottom"></view>
+    </scroll-view>
+    <view class="word-chat-compose">
+      <textarea class="word-chat-input" value="{{chatInput}}" bindinput="handleChatInput" maxlength="{{chatMaxLength}}" placeholder="询问关于 {{chatWord.term}} 的问题…" auto-height="false" aria-label="输入关于 {{chatWord.term}} 的问题"></textarea>
+      <button class="word-chat-send" bindtap="sendChatInput" disabled="{{!chatInput || chatLoading}}" loading="{{chatLoading}}" aria-label="发送问题">➤</button>
+    </view>
+    <text class="word-chat-count">{{chatInput.length}} / {{chatMaxLength}}</text>
   </view>
 </view>

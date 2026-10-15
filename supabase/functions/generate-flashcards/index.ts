@@ -1,4 +1,6 @@
 import { resolveOwner } from '../_shared/resolve-owner.ts'
+import { callAiProvider, hasAiProviderKey, parseAiProvider } from '../_shared/ai-provider.ts'
+import type { AiProvider } from '../_shared/ai-provider.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,6 +9,7 @@ const corsHeaders = {
 
 type FlashcardRequest = {
   wordIds: string[]
+  provider: AiProvider
 }
 
 type VocabularyRow = {
@@ -44,8 +47,9 @@ function parseRequest(value: unknown): FlashcardRequest | null {
   const wordIds = Array.isArray(request.wordIds)
     ? [...new Set(request.wordIds.filter((id): id is string => typeof id === 'string' && id.length > 0))]
     : []
-  if (wordIds.length < 1 || wordIds.length > 60) return null
-  return { wordIds }
+  const provider = parseAiProvider(request.provider)
+  if (!provider || wordIds.length < 1 || wordIds.length > 60) return null
+  return { wordIds, provider }
 }
 
 function validateCards(value: unknown, words: VocabularyRow[]) {
@@ -110,51 +114,6 @@ JSON 格式：
 {"cards":[{"wordId":"输入 ID","meaning":"中文释义","usage":"英文例句","synonyms":["同义词"],"antonyms":["反义词"],"memoryTip":"中文记忆方法"}]}`
 }
 
-async function callDeepSeek(apiKey: string, words: VocabularyRow[]) {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 60_000)
-  try {
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'deepseek-v4-flash',
-        messages: [
-          { role: 'system', content: systemPrompt() },
-          { role: 'user', content: `请为以下词汇生成卡片：\n${JSON.stringify({ words })}` },
-        ],
-        response_format: { type: 'json_object' },
-        thinking: { type: 'disabled' },
-        stream: false,
-        max_tokens: 7000,
-        temperature: 0.45,
-      }),
-      signal: controller.signal,
-    })
-    if (!response.ok) {
-      const details = await response.text()
-      throw new Error(`DeepSeek API ${response.status}: ${details.slice(0, 300)}`)
-    }
-    const payload = await response.json()
-    const content = payload?.choices?.[0]?.message?.content
-    if (typeof content !== 'string' || !content.trim()) throw new Error('DeepSeek 返回了空内容')
-    const usage = payload?.usage
-    return {
-      content,
-      tokenUsage: {
-        promptTokens: Number.isInteger(usage?.prompt_tokens) ? usage.prompt_tokens : 0,
-        completionTokens: Number.isInteger(usage?.completion_tokens) ? usage.completion_tokens : 0,
-        totalTokens: Number.isInteger(usage?.total_tokens) ? usage.total_tokens : 0,
-      } as TokenUsage,
-    }
-  } finally {
-    clearTimeout(timeout)
-  }
-}
-
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (request.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405)
@@ -165,8 +124,7 @@ Deno.serve(async (request) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  const deepSeekApiKey = Deno.env.get('DEEPSEEK_API_KEY')
-  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey || !deepSeekApiKey) {
+  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
     return jsonResponse({ error: 'AI 服务尚未完成配置' }, 503)
   }
 
@@ -187,6 +145,7 @@ Deno.serve(async (request) => {
   }
   const flashcardRequest = parseRequest(body)
   if (!flashcardRequest) return jsonResponse({ error: '请选择 1–60 个单词' }, 422)
+  if (!hasAiProviderKey(flashcardRequest.provider)) return jsonResponse({ error: '所选 AI 接入商尚未配置' }, 503)
 
   const { data, error } = await owner.admin
     .from('vocabulary_entries')
@@ -206,7 +165,10 @@ Deno.serve(async (request) => {
   const tokenUsage: TokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const generated = await callDeepSeek(deepSeekApiKey, words)
+      const generated = await callAiProvider(flashcardRequest.provider, [
+        { role: 'system', content: systemPrompt() },
+        { role: 'user', content: `请为以下词汇生成卡片：\n${JSON.stringify({ words })}` },
+      ], { timeout: 60_000, maxTokens: 7000, temperature: 0.45, json: true })
       tokenUsage.promptTokens += generated.tokenUsage.promptTokens
       tokenUsage.completionTokens += generated.tokenUsage.completionTokens
       tokenUsage.totalTokens += generated.tokenUsage.totalTokens

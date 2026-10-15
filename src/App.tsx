@@ -1,7 +1,10 @@
 import {
+  AI_PROVIDERS,
   analyzeVocabularyText,
   filterAndSortVocabularyEntries,
+  normalizeAiProvider,
   paginate,
+  type AiProvider,
   type MasteryFilter,
   type VocabularySort,
 } from '@wordbook/core'
@@ -86,6 +89,7 @@ const dictionaryEngines = {
 
 type DictionaryEngine = keyof typeof dictionaryEngines
 const dictionaryEngineStorageKey = 'wordbook:dictionary-engine'
+const aiProviderStorageKey = 'wordbook:ai-provider'
 
 function loadDictionaryEngine(): DictionaryEngine {
   const savedEngine = window.localStorage.getItem(dictionaryEngineStorageKey)
@@ -156,6 +160,7 @@ function App() {
   const [message, setMessage] = useState('')
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const [dictionaryEngine, setDictionaryEngine] = useState<DictionaryEngine>(loadDictionaryEngine)
+  const [aiProvider, setAiProvider] = useState<AiProvider>(() => normalizeAiProvider(window.localStorage.getItem(aiProviderStorageKey)))
   const [reviewSelecting, setReviewSelecting] = useState(false)
   const [passageSelecting, setPassageSelecting] = useState(false)
   const [flashcardSelecting, setFlashcardSelecting] = useState(false)
@@ -172,10 +177,15 @@ function App() {
     window.localStorage.setItem(dictionaryEngineStorageKey, engine)
   }
 
+  const changeAiProvider = (provider: AiProvider) => {
+    setAiProvider(provider)
+    window.localStorage.setItem(aiProviderStorageKey, provider)
+  }
+
   const toggleReviewSelection = () => {
     if (!user) {
       setCloudOpen(true)
-      setSyncMessage('AI 复习需要登录，以便服务端安全调用 DeepSeek。')
+      setSyncMessage('AI 复习需要登录，以便服务端安全调用所选 AI 接入商。')
       return
     }
     setPassageSelecting(false)
@@ -188,7 +198,7 @@ function App() {
   const togglePassageSelection = () => {
     if (!user) {
       setCloudOpen(true)
-      setSyncMessage('AI 短文需要登录，以便服务端安全调用 DeepSeek。')
+      setSyncMessage('AI 短文需要登录，以便服务端安全调用所选 AI 接入商。')
       return
     }
     setReviewSelecting(false)
@@ -201,7 +211,7 @@ function App() {
   const toggleFlashcardSelection = () => {
     if (!user) {
       setCloudOpen(true)
-      setSyncMessage('AI 卡片需要登录，以便服务端安全调用 DeepSeek。')
+      setSyncMessage('AI 卡片需要登录，以便服务端安全调用所选 AI 接入商。')
       return
     }
     setReviewSelecting(false)
@@ -214,7 +224,7 @@ function App() {
   const startSingleWordReview = (id: string) => {
     if (!user) {
       setCloudOpen(true)
-      setSyncMessage('AI 测试需要登录，以便服务端安全调用 DeepSeek。')
+      setSyncMessage('AI 测试需要登录，以便服务端安全调用所选 AI 接入商。')
       window.requestAnimationFrame(() => {
         const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
         document.getElementById('cloud-panel')?.scrollIntoView({
@@ -234,7 +244,7 @@ function App() {
   const startWordChat = (word: VocabularyEntry) => {
     if (!user) {
       setCloudOpen(true)
-      setSyncMessage('AI 对话需要登录，以便服务端安全调用 DeepSeek。')
+      setSyncMessage('AI 对话需要登录，以便服务端安全调用所选 AI 接入商。')
       window.requestAnimationFrame(() => {
         const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
         document.getElementById('cloud-panel')?.scrollIntoView({
@@ -900,6 +910,12 @@ function App() {
               {search && <button type="button" onClick={() => { setSearch(''); setCurrentPage(1) }} title="清除搜索"><X size={16} /></button>}
             </label>
             <label className="select-wrap">
+              <select value={aiProvider} onChange={(event) => changeAiProvider(normalizeAiProvider(event.target.value))} aria-label="AI 接入商">
+                {AI_PROVIDERS.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}
+              </select>
+              <ChevronDown size={16} />
+            </label>
+            <label className="select-wrap">
               <select value={masteryFilter} onChange={(event) => { setMasteryFilter(event.target.value as MasteryFilter); setCurrentPage(1) }} aria-label="按掌握度筛选">
                 <option value="all">全部程度</option>
                 <option value="learning">学习中 · 1–4</option>
@@ -937,6 +953,7 @@ function App() {
               </div>
               {reviewSelecting && (
                 <ReviewPanel
+                  provider={aiProvider}
                   key={quickReviewRequest ? `quick-${quickReviewRequest}` : 'manual'}
                   selectedWords={selectedWords}
                   prepareWords={prepareReviewWords}
@@ -951,6 +968,7 @@ function App() {
               )}
               {passageSelecting && (
                 <PassagePanel
+                  provider={aiProvider}
                   key={selectedWordIds.join(',')}
                   selectedWords={selectedWords}
                   prepareWords={prepareReviewWords}
@@ -962,6 +980,7 @@ function App() {
               )}
               {flashcardSelecting && (
                 <FlashcardPanel
+                  provider={aiProvider}
                   allWords={entries}
                   selectedWords={selectedWords}
                   prepareWords={prepareReviewWords}
@@ -1077,6 +1096,7 @@ function App() {
       </footer>
       {chatWord && (
         <WordChatDialog
+          provider={aiProvider}
           word={chatWord}
           prepareWord={prepareChatWord}
           onClose={() => setChatWord(null)}
