@@ -1,4 +1,5 @@
 import type { User } from '@supabase/supabase-js'
+import { mergeEntriesLastWriteWins, normalizeTerm, reconcileDuplicateTerms } from '@wordbook/core'
 import { db, type VocabularyEntry } from './storage'
 import { getAccessToken, supabase } from './supabase'
 import { createSyncError } from './syncError'
@@ -34,23 +35,7 @@ function isOwnershipCollision(error: unknown) {
   return String(details.code) === '42501' && /USING expression/i.test(String(details.message))
 }
 
-function reconcileDuplicateTerms(entries: VocabularyEntry[], userId: string) {
-  const keepByTerm = new Map<string, VocabularyEntry>()
-  for (const entry of entries) {
-    if (entry.deletedAt) continue
-    const normalizedTerm = entry.term.trim().toLocaleLowerCase()
-    const current = keepByTerm.get(normalizedTerm)
-    if (!current || entry.updatedAt > current.updatedAt) keepByTerm.set(normalizedTerm, entry)
-  }
-
-  const keepIds = new Set([...keepByTerm.values()].map((entry) => entry.id))
-  const deletedAt = new Date().toISOString()
-  return entries.map((entry) => (
-    !entry.deletedAt && !keepIds.has(entry.id)
-      ? { ...entry, ownerId: userId, deletedAt, updatedAt: deletedAt, syncStatus: 'pending' as const }
-      : entry
-  ))
-}
+// The reconcileDuplicateTerms function has been moved to '@wordbook/core' and is now imported.
 
 function fromCloud(row: CloudEntry): VocabularyEntry {
   return {
@@ -72,7 +57,7 @@ function toCloud(entry: VocabularyEntry, userId: string): CloudEntry {
     id: entry.id,
     user_id: userId,
     term: entry.term,
-    normalized_term: entry.term.trim().toLocaleLowerCase(),
+    normalized_term: normalizeTerm(entry.term),
     meaning: entry.meaning,
     note: entry.note,
     mastery: entry.mastery,
@@ -110,15 +95,12 @@ async function synchronizeOnce(user: User): Promise<SyncResult> {
     .eq('user_id', user.id)
   if (pullError) throw createSyncError('下载云端词条', pullError)
 
-  const merged = new Map<string, VocabularyEntry>()
-  for (const entry of ownedLocal) merged.set(entry.id, entry)
-  for (const row of (data ?? []) as CloudEntry[]) {
-    const remote = fromCloud(row)
-    const local = merged.get(remote.id)
-    if (!local || remote.updatedAt > local.updatedAt) merged.set(remote.id, remote)
-  }
-
-  let mergedEntries = reconcileDuplicateTerms([...merged.values()], user.id)
+  const remoteEntries = ((data ?? []) as CloudEntry[]).map(fromCloud)
+  let mergedEntries = reconcileDuplicateTerms(
+    mergeEntriesLastWriteWins(ownedLocal, remoteEntries),
+    user.id,
+    new Date().toISOString(),
+  ) as VocabularyEntry[]
   let toUpload = mergedEntries.filter((entry) => entry.syncStatus !== 'synced')
   const idRemap: Record<string, string> = {}
   if (toUpload.length) {

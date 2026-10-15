@@ -1,21 +1,13 @@
 import Dexie, { type Table } from 'dexie'
+import {
+  isLegacyVocabularyEntry,
+  isVocabularyEntry,
+  type VocabularyEntry as CoreVocabularyEntry,
+} from '@wordbook/core'
 
 export type SyncStatus = 'local' | 'pending' | 'synced' | 'conflict'
 
-export type VocabularyEntry = {
-  id: string
-  term: string
-  meaning: string
-  note: string
-  mastery: number
-  createdAt: string
-  updatedAt: string
-  ownerId: string | null
-  deletedAt: string | null
-  syncStatus: SyncStatus
-}
-
-type LegacyEntry = Omit<VocabularyEntry, 'ownerId' | 'deletedAt' | 'syncStatus'>
+export type VocabularyEntry = CoreVocabularyEntry & { ownerId: string | null; syncStatus: SyncStatus }
 
 const LEGACY_STORAGE_KEY = 'wordbook.entries.v1'
 const MIGRATION_KEY = 'wordbook.dexie.migrated'
@@ -33,32 +25,6 @@ class WordbookDatabase extends Dexie {
 
 export const db = new WordbookDatabase()
 
-function isLegacyEntry(value: unknown): value is LegacyEntry {
-  if (!value || typeof value !== 'object') return false
-  const entry = value as Record<string, unknown>
-  return (
-    typeof entry.id === 'string' &&
-    typeof entry.term === 'string' &&
-    typeof entry.meaning === 'string' &&
-    typeof entry.note === 'string' &&
-    typeof entry.mastery === 'number' &&
-    entry.mastery >= 0 &&
-    entry.mastery <= 5 &&
-    typeof entry.createdAt === 'string' &&
-    typeof entry.updatedAt === 'string'
-  )
-}
-
-function isVocabularyEntry(value: unknown): value is VocabularyEntry {
-  if (!isLegacyEntry(value)) return false
-  const entry = value as unknown as Record<string, unknown>
-  return (
-    (typeof entry.ownerId === 'string' || entry.ownerId === null) &&
-    (typeof entry.deletedAt === 'string' || entry.deletedAt === null) &&
-    ['local', 'pending', 'synced', 'conflict'].includes(String(entry.syncStatus))
-  )
-}
-
 export async function initializeStorage() {
   if (localStorage.getItem(MIGRATION_KEY)) return
 
@@ -66,7 +32,7 @@ export async function initializeStorage() {
     const saved = localStorage.getItem(LEGACY_STORAGE_KEY)
     const parsed: unknown = saved ? JSON.parse(saved) : []
     if (Array.isArray(parsed)) {
-      const migrated = parsed.filter(isLegacyEntry).map((entry) => ({
+      const migrated = parsed.filter(isLegacyVocabularyEntry).map((entry) => ({
         ...entry,
         ownerId: null,
         deletedAt: null,
@@ -150,7 +116,7 @@ export function parseBackup(contents: string): VocabularyEntry[] {
 
   return parsed.map((value) => {
     if (isVocabularyEntry(value)) return value
-    if (isLegacyEntry(value)) {
+    if (isLegacyVocabularyEntry(value)) {
       return { ...value, ownerId: null, deletedAt: null, syncStatus: 'local' }
     }
     throw new Error('备份文件格式不正确')

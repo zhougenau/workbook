@@ -26,6 +26,8 @@
 - 默认分支：`main`
 - 克隆地址：`https://github.com/zhougenau/workbook.git`
 
+仓库根目录是 Web 应用和 Vercel 构建入口；`apps/mini` 是微信原生小程序，`packages/core` 是两端共用的纯逻辑，`supabase` 存放数据库迁移和 Edge Functions。Web 和小程序的配套改动应在同一次提交中发布。
+
 ## Vercel 部署
 
 - Vercel 项目：[fredzhou-5516/workbook](https://vercel.com/fredzhou-5516/workbook)
@@ -58,6 +60,8 @@ cd workbook
 npm install
 npm run dev
 ```
+
+修改共享规则后可运行 `npm --prefix packages/core test`。根目录的 `dev` 和 `build` 会自动构建 core，并更新 `apps/mini/vendor/wordbook-core.js`。微信开发者工具导入 `apps/mini`，无需启动 Vite；小程序的登录、云函数和发音配置见 [小程序说明](apps/mini/README.md)。
 
 打开 `http://127.0.0.1:5173/`。生产构建使用：
 

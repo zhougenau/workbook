@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@supabase/supabase-js@2'
+import { resolveOwner } from '../_shared/resolve-owner.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -151,10 +151,20 @@ Deno.serve(async (request) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   const deepSeekApiKey = Deno.env.get('DEEPSEEK_API_KEY')
-  if (!supabaseUrl || !supabaseAnonKey || !deepSeekApiKey) {
+  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey || !deepSeekApiKey) {
     return jsonResponse({ error: 'AI 服务尚未完成配置' }, 503)
   }
+
+  let owner
+  try {
+    owner = await resolveOwner(authorization, supabaseUrl, supabaseAnonKey, serviceRoleKey)
+  } catch (error) {
+    console.error('AI owner lookup failed', error)
+    return jsonResponse({ error: '验证登录身份失败' }, 500)
+  }
+  if (!owner) return jsonResponse({ error: '登录已失效，请重新登录' }, 401)
 
   let body: unknown
   try {
@@ -165,17 +175,10 @@ Deno.serve(async (request) => {
   const reviewRequest = parseRequest(body)
   if (!reviewRequest) return jsonResponse({ error: '请选择 1–60 个单词；题目数量需为 5–60，且不少于单词数量' }, 422)
 
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authorization } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-  const { data: userData, error: userError } = await supabase.auth.getUser()
-  if (userError || !userData.user) return jsonResponse({ error: '登录已失效，请重新登录' }, 401)
-
-  const { data, error } = await supabase
+  const { data, error } = await owner.admin
     .from('vocabulary_entries')
     .select('id, term, meaning, note')
-    .eq('user_id', userData.user.id)
+    .eq('user_id', owner.ownerId)
     .is('deleted_at', null)
     .in('id', reviewRequest.wordIds)
   if (error) return jsonResponse({ error: '读取复习单词失败' }, 500)

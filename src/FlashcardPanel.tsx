@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { BrainCircuit, ChevronLeft, ChevronRight, Layers3, LoaderCircle, RotateCcw, Volume2, X } from 'lucide-react'
-import { generateFlashcards, type Flashcard, type GeneratedFlashcards } from './flashcards'
+import { clampFlashcardIndex, selectFlashcardWords, type Flashcard, type GeneratedFlashcards } from '@wordbook/core'
+import { generateFlashcards } from './flashcards'
 import type { VocabularyEntry } from './storage'
 
 type FlashcardPanelProps = {
@@ -9,17 +10,6 @@ type FlashcardPanelProps = {
   prepareWords: () => Promise<Record<string, string>>
   onComplete: (wordIds: string[]) => void
   onClose: () => void
-}
-
-function randomSample(words: VocabularyEntry[], count: number) {
-  const shuffled = [...words]
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const target = Math.floor(Math.random() * (index + 1))
-    const current = shuffled[index]
-    shuffled[index] = shuffled[target]
-    shuffled[target] = current
-  }
-  return shuffled.slice(0, count)
 }
 
 function readFlashcard(card: Flashcard, showUnsupportedMessage = false) {
@@ -55,7 +45,7 @@ export function FlashcardPanel({ allWords, selectedWords, prepareWords, onComple
     setLoading(true)
     setError('')
     try {
-      const sourceWords = selectedWords.length ? selectedWords : randomSample(allWords, 10)
+      const sourceWords = selectFlashcardWords(allWords, selectedWords.map((word) => word.id))
       const idRemap = await prepareWords()
       request.signal.throwIfAborted()
       const wordIds = sourceWords.map((word) => idRemap[word.id] ?? word.id)
@@ -125,12 +115,12 @@ export function FlashcardPanel({ allWords, selectedWords, prepareWords, onComple
             </div>
           </article>
           <div className="flashcard-navigation">
-            <button type="button" onClick={() => setActiveIndex((index) => Math.max(0, index - 1))} disabled={activeIndex === 0}><ChevronLeft size={18} />上一张</button>
+            <button type="button" onClick={() => setActiveIndex((index) => clampFlashcardIndex(index - 1, result.cards.length))} disabled={activeIndex === 0}><ChevronLeft size={18} />上一张</button>
             <div>{result.cards.map((item, index) => <button key={item.wordId} type="button" className={index === activeIndex ? 'active' : ''} onClick={() => setActiveIndex(index)} aria-label={`查看第 ${index + 1} 张：${item.word}`} aria-pressed={index === activeIndex} />)}</div>
             {activeIndex === result.cards.length - 1 ? (
               <button className="flashcard-test-button" type="button" onClick={() => onComplete(studiedWordIds)} disabled={!studiedWordIds.length}>开始 AI 测试<BrainCircuit size={18} /></button>
             ) : (
-              <button type="button" onClick={() => setActiveIndex((index) => Math.min(result.cards.length - 1, index + 1))}>下一张<ChevronRight size={18} /></button>
+              <button type="button" onClick={() => setActiveIndex((index) => clampFlashcardIndex(index + 1, result.cards.length))}>下一张<ChevronRight size={18} /></button>
             )}
           </div>
           <dl className="review-token-usage" aria-label="本次 AI Token 用量">

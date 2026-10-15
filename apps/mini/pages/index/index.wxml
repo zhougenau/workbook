@@ -1,0 +1,365 @@
+<view class="page-shell">
+  <view class="topbar">
+    <view class="brand-mark">词</view>
+    <view class="brand-copy">
+      <text class="brand-name">词屿</text>
+      <text class="brand-subtitle">本地优先的随身单词本</text>
+    </view>
+    <text class="entry-total">{{entries.length}} 词</text>
+  </view>
+
+  <view class="connection-strip">
+    <view class="connection-item">
+      <view class="status-dot status-dot--{{healthStatus}}"></view>
+      <view class="connection-copy">
+        <text class="connection-title">Supabase</text>
+        <text class="connection-detail">{{healthMessage}}</text>
+      </view>
+      <button class="text-button" bindtap="testConnection" loading="{{healthStatus === 'checking'}}">检测</button>
+    </view>
+    <view class="connection-item">
+      <view class="status-dot status-dot--{{loginStatus}}"></view>
+      <view class="connection-copy">
+        <text class="connection-title">微信身份</text>
+        <text class="connection-detail">{{loginMessage}}</text>
+      </view>
+      <button class="text-button" bindtap="login" loading="{{loginStatus === 'checking'}}">连接</button>
+    </view>
+    <view class="connection-item">
+      <view class="status-dot status-dot--{{syncStatus}}"></view>
+      <view class="connection-copy">
+        <text class="connection-title">云端词库</text>
+        <text class="connection-detail">{{syncMessage}}</text>
+      </view>
+      <button class="text-button" bindtap="synchronize" loading="{{syncStatus === 'checking'}}">同步</button>
+    </view>
+  </view>
+
+  <view wx:if="{{loginStatus === 'ok'}}" class="account-link-section">
+    <view class="account-link-heading">
+      <view class="status-dot status-dot--{{linkStatus}}"></view>
+      <view>
+        <text class="connection-title">绑定 Web 词屿</text>
+        <text class="connection-detail">{{linkMessage}}</text>
+      </view>
+    </view>
+    <view class="account-link-form">
+      <input
+        value="{{linkCode}}"
+        bindinput="handleLinkCode"
+        maxlength="9"
+        placeholder="XXXX-XXXX"
+        aria-label="Web 一次性绑定码"
+      />
+      <button bindtap="bindWebAccount" loading="{{linkStatus === 'checking'}}">绑定并合并</button>
+    </view>
+  </view>
+
+  <view class="capture-section">
+    <view class="section-heading">
+      <text class="section-index">01</text>
+      <view>
+        <text class="section-title">记下新单词</text>
+        <text class="section-note">先落笔，再慢慢理解。</text>
+      </view>
+    </view>
+
+    <view class="analyzer">
+      <view class="field-heading">
+        <text>智能选取</text>
+        <text class="field-hint">粘贴单词、释义和例句</text>
+      </view>
+      <textarea
+        class="analysis-input"
+        value="{{analysisSource}}"
+        data-field="analysisSource"
+        bindinput="handleFieldInput"
+        placeholder="convivial adj.&#10;欢乐友好的&#10;The dinner had a convivial atmosphere."
+        maxlength="3000"
+      ></textarea>
+      <button class="analyze-button" bindtap="analyzeText" disabled="{{!analysisSource}}">智能分析</button>
+    </view>
+
+    <view class="form-grid">
+      <label class="field field--term">
+        <text>单词或短语</text>
+        <input value="{{term}}" data-field="term" bindinput="handleFieldInput" placeholder="serendipity" maxlength="200" />
+      </label>
+      <label class="field">
+        <text>中文释义</text>
+        <input value="{{meaning}}" data-field="meaning" bindinput="handleFieldInput" placeholder="意外发现美好事物" maxlength="500" />
+      </label>
+      <label class="field field--note">
+        <text>例句或笔记</text>
+        <input value="{{note}}" data-field="note" bindinput="handleFieldInput" placeholder="在哪里遇见它？" maxlength="1000" />
+      </label>
+      <button class="primary-button" bindtap="addEntry">＋ 收录单词</button>
+    </view>
+    <view wx:if="{{message}}" class="message">{{message}}</view>
+  </view>
+
+  <view class="ai-section">
+    <view class="section-heading section-heading--library">
+      <text class="section-index">02</text>
+      <view>
+        <text class="section-title">AI 学习工坊</text>
+        <text class="section-note">已选择 {{aiSelectedIds.length}} 个单词，单次最多 10 个。</text>
+      </view>
+    </view>
+
+    <view class="ai-toolbar">
+      <view class="ai-word-picker">
+        <text class="ai-picker-label">{{entries.length ? '在下方词库勾选本次学习词汇' : '请先在下方收录单词'}}</text>
+        <text class="ai-picker-count">已选 {{aiSelectedIds.length}} / 10</text>
+      </view>
+      <view class="ai-control-row">
+        <text>短文长度</text>
+        <view class="segmented-control">
+          <button class="{{aiLength === 'short' ? 'active' : ''}}" data-length="short" bindtap="chooseAiLength">短</button>
+          <button class="{{aiLength === 'medium' ? 'active' : ''}}" data-length="medium" bindtap="chooseAiLength">中</button>
+          <button class="{{aiLength === 'long' ? 'active' : ''}}" data-length="long" bindtap="chooseAiLength">长</button>
+        </view>
+      </view>
+      <view class="ai-control-row">
+        <text>复习难度</text>
+        <view class="segmented-control segmented-control--wide">
+          <button class="{{aiDifficulty === 'basic' ? 'active' : ''}}" data-difficulty="basic" bindtap="chooseAiDifficulty">基础</button>
+          <button class="{{aiDifficulty === 'intermediate' ? 'active' : ''}}" data-difficulty="intermediate" bindtap="chooseAiDifficulty">进阶</button>
+          <button class="{{aiDifficulty === 'advanced' ? 'active' : ''}}" data-difficulty="advanced" bindtap="chooseAiDifficulty">挑战</button>
+        </view>
+      </view>
+      <view class="ai-actions">
+        <button class="ai-action--passage" bindtap="createPassage" loading="{{aiStatus === 'checking'}}" disabled="{{!aiSelectedIds.length || aiStatus === 'checking'}}">生成短文</button>
+        <button class="ai-action--review" bindtap="createReview" loading="{{aiStatus === 'checking'}}" disabled="{{!aiSelectedIds.length || aiStatus === 'checking'}}">生成复习题</button>
+        <button class="ai-action--flashcard" bindtap="createFlashcards" loading="{{aiStatus === 'checking'}}" disabled="{{!entries.length || aiStatus === 'checking'}}">{{aiSelectedIds.length ? '生成卡片' : '随机卡片'}}</button>
+      </view>
+      <text class="ai-message ai-message--{{aiStatus}}">{{aiMessage}}</text>
+    </view>
+
+    <view wx:if="{{passage}}" class="passage-result">
+      <text class="result-kicker">AI READING · {{passage.tokenUsage.totalTokens}} TOKENS</text>
+      <text class="passage-title">{{passage.title}}</text>
+      <text class="passage-copy" user-select>{{passage.passage}}</text>
+      <view class="passage-translation">
+        <text>参考译文</text>
+        <text user-select>{{passage.translation}}</text>
+      </view>
+      <view class="used-words">
+        <text wx:for="{{passage.usedWords}}" wx:key="*this">{{item}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{flashcards && currentFlashcard}}" class="flashcard-result">
+      <view class="flashcard-result-heading">
+        <view>
+          <text class="result-kicker">DEEPSEEK AI FLASHCARDS</text>
+          <text class="flashcard-progress">{{flashcardIndex + 1}} / {{flashcards.cards.length}}</text>
+        </view>
+        <button class="flashcard-close" bindtap="closeFlashcards" aria-label="退出卡片学习">×</button>
+      </view>
+
+      <view class="flashcard-sheet">
+        <view class="flashcard-word-row">
+          <text class="flashcard-word">{{currentFlashcard.word}}</text>
+          <button
+            class="flashcard-speech {{speechStatus === 'playing' ? 'active' : ''}}"
+            bindtap="speakFlashcard"
+            loading="{{speechStatus === 'loading'}}"
+            aria-label="{{speechStatus === 'playing' ? '停止发音' : '朗读单词和例句'}}"
+          >{{speechStatus === 'playing' ? '停止' : speechStatus === 'loading' ? '加载中' : '发音'}}</button>
+        </view>
+        <view class="flashcard-field">
+          <text>释义</text>
+          <text>{{currentFlashcard.meaning}}</text>
+        </view>
+        <view class="flashcard-field">
+          <text>用法</text>
+          <text user-select>{{currentFlashcard.usage}}</text>
+        </view>
+        <view class="flashcard-supplement">
+          <view>
+            <text>同义词</text>
+            <view class="flashcard-tags">
+              <block wx:if="{{currentFlashcard.synonyms.length}}">
+                <text wx:for="{{currentFlashcard.synonyms}}" wx:key="*this">{{item}}</text>
+              </block>
+              <text wx:else class="flashcard-empty-tag">暂无常用同义词</text>
+            </view>
+          </view>
+          <view>
+            <text>反义词</text>
+            <view class="flashcard-tags">
+              <block wx:if="{{currentFlashcard.antonyms.length}}">
+                <text wx:for="{{currentFlashcard.antonyms}}" wx:key="*this">{{item}}</text>
+              </block>
+              <text wx:else class="flashcard-empty-tag">暂无常用反义词</text>
+            </view>
+          </view>
+          <view class="flashcard-memory">
+            <text>记忆方法</text>
+            <text>{{currentFlashcard.memoryTip}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="flashcard-dots">
+        <button
+          wx:for="{{flashcards.cards}}"
+          wx:key="wordId"
+          class="{{index === flashcardIndex ? 'active' : ''}}"
+          data-index="{{index}}"
+          bindtap="selectFlashcard"
+          aria-label="查看第 {{index + 1}} 张：{{item.word}}"
+        />
+      </view>
+      <view class="flashcard-navigation">
+        <button data-direction="previous" bindtap="navigateFlashcard" disabled="{{flashcardIndex === 0}}">‹ 上一张</button>
+        <button wx:if="{{flashcardIndex + 1 === flashcards.cards.length}}" class="flashcard-test" bindtap="startFlashcardReview">开始 AI 测试</button>
+        <button wx:else data-direction="next" bindtap="navigateFlashcard">下一张 ›</button>
+      </view>
+      <view class="flashcard-token-usage">
+        <text>输入 {{flashcards.tokenUsage.promptTokens}}</text>
+        <text>输出 {{flashcards.tokenUsage.completionTokens}}</text>
+        <text>总计 {{flashcards.tokenUsage.totalTokens}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{quiz}}" class="quiz-result">
+      <view class="quiz-heading">
+        <view>
+          <text class="result-kicker">AI REVIEW · {{quiz.tokenUsage.totalTokens}} TOKENS</text>
+          <text class="quiz-title">{{quiz.title}}</text>
+        </view>
+        <text wx:if="{{quizComplete}}">{{quizCorrectCount}} / {{quiz.questions.length}}</text>
+        <text wx:else>{{quizCurrentIndex + 1}} / {{quiz.questions.length}}</text>
+      </view>
+      <view wx:if="{{currentQuestion}}" class="quiz-question">
+        <text class="question-index">QUESTION {{quizCurrentIndex + 1}}</text>
+        <text class="question-prompt">{{currentQuestion.prompt}}</text>
+        <view class="quiz-options">
+          <button
+            wx:for="{{currentQuestion.optionItems}}"
+            wx:key="optionIndex"
+            wx:for-item="option"
+            class="quiz-option quiz-option--{{option.state}}"
+            data-option="{{option.optionIndex}}"
+            bindtap="answerReview"
+            disabled="{{currentQuestion.answered}}"
+          >{{option.text}}</button>
+        </view>
+        <view wx:if="{{currentQuestion.answered}}" class="question-feedback question-feedback--{{currentQuestion.answerCorrect ? 'correct' : 'wrong'}}">
+          <text>{{currentQuestion.feedbackTitle}}</text>
+          <text>{{currentQuestion.explanation}}</text>
+        </view>
+        <button wx:if="{{currentQuestion.answered}}" class="quiz-next" bindtap="nextReviewQuestion">{{quizCurrentIndex + 1 === quiz.questions.length ? '查看成绩' : '下一题 →'}}</button>
+      </view>
+      <view wx:if="{{quizComplete}}" class="quiz-complete">
+        <text>本轮复习完成</text>
+        <text class="quiz-score">{{quizCorrectCount}} / {{quiz.questions.length}}</text>
+        <text>{{masteryMessage}}</text>
+        <view class="mastery-review">
+          <view class="mastery-review-heading">
+            <text>熟练度变化</text>
+            <text>每轮自动调整最多 1 级</text>
+          </view>
+          <view wx:for="{{masteryChanges}}" wx:key="wordId" class="mastery-change">
+            <view>
+              <text>{{item.term}}</text>
+              <text>{{item.correctCount}}/{{item.questionCount}} 题正确 · 证据 {{item.evidenceLabel}}</text>
+            </view>
+            <text class="mastery-level mastery-level--{{item.direction}}">{{item.previousLevel}} → {{item.nextLevel}}</text>
+          </view>
+        </view>
+        <text class="quiz-restart-hint">重新点击“生成复习题”可开始新一轮。</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="library-section">
+    <view class="section-heading section-heading--library">
+      <text class="section-index">03</text>
+      <view>
+        <text class="section-title">我的词库</text>
+        <text class="section-note">选择单词用于 AI 学习，熟练度从 0 到 5 逐步积累。</text>
+      </view>
+    </view>
+
+    <view class="search-box">
+      <text class="search-icon">⌕</text>
+      <input value="{{search}}" bindinput="handleSearch" placeholder="搜索单词、释义或笔记" />
+    </view>
+
+    <view class="library-filter-row">
+      <picker mode="selector" range="{{masteryFilterLabels}}" value="{{masteryFilterIndex}}" bindchange="handleMasteryFilterChange" aria-label="按掌握度筛选">
+        <view class="library-filter-picker">{{masteryFilterLabels[masteryFilterIndex]}} <text>⌄</text></view>
+      </picker>
+      <picker mode="selector" range="{{sortLabels}}" value="{{sortIndex}}" bindchange="handleSortChange" aria-label="排序方式">
+        <view class="library-filter-picker">{{sortLabels[sortIndex]}} <text>⌄</text></view>
+      </picker>
+      <picker mode="selector" range="{{pageSizeOptions}}" value="{{pageSizeIndex}}" bindchange="handlePageSizeChange" aria-label="每页显示数量">
+        <view class="library-filter-picker">每页 {{pageSize}} 个 <text>⌄</text></view>
+      </picker>
+    </view>
+
+    <view wx:if="{{filteredEntryCount}}" class="pagination pagination--top">
+      <view class="pagination-summary">
+        <text>第 <text class="pagination-strong">{{currentPage}}</text> / {{totalPages}} 页</text>
+        <text>显示 {{pageFirstItem}}–{{pageLastItem}}，共 {{filteredEntryCount}} 个</text>
+      </view>
+      <view class="pagination-buttons">
+        <button class="pagination-button" data-action="first" bindtap="handlePageChange" disabled="{{currentPage === 1}}" aria-label="最前页">«</button>
+        <button class="pagination-button" data-action="previous" bindtap="handlePageChange" disabled="{{currentPage === 1}}" aria-label="上一页">‹</button>
+        <button class="pagination-button" data-action="next" bindtap="handlePageChange" disabled="{{currentPage === totalPages}}" aria-label="下一页">›</button>
+        <button class="pagination-button" data-action="last" bindtap="handlePageChange" disabled="{{currentPage === totalPages}}" aria-label="最后页">»</button>
+      </view>
+    </view>
+
+    <view wx:if="{{visibleEntries.length}}" class="word-list">
+      <view wx:for="{{visibleEntries}}" wx:key="id" class="word-row">
+        <checkbox
+          class="ai-word-checkbox"
+          checked="{{item.aiSelected}}"
+          color="#315b47"
+          data-id="{{item.id}}"
+          bindtap="toggleAiWord"
+          aria-label="选择 {{item.term}} 用于 AI 学习"
+        />
+        <view class="word-main">
+          <text class="word-term">{{item.term}}</text>
+          <text class="word-meaning">{{item.meaning || '尚未填写释义'}}</text>
+          <text wx:if="{{item.note}}" class="word-note">{{item.note}}</text>
+        </view>
+        <view class="word-actions">
+          <view class="mastery-control">
+            <button class="step-button" data-id="{{item.id}}" data-delta="-1" bindtap="changeMastery" disabled="{{item.mastery === 0}}">−</button>
+            <view class="mastery-value">
+              <text>{{item.mastery}}</text>
+              <text>{{item.masteryLabel}}</text>
+            </view>
+            <button class="step-button" data-id="{{item.id}}" data-delta="1" bindtap="changeMastery" disabled="{{item.mastery === 5}}">＋</button>
+          </view>
+          <button class="delete-button" data-id="{{item.id}}" bindtap="deleteEntry" aria-label="删除 {{item.term}}">×</button>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{filteredEntryCount}}" class="pagination pagination--bottom">
+      <view class="pagination-summary">
+        <text>第 <text class="pagination-strong">{{currentPage}}</text> / {{totalPages}} 页</text>
+        <text>显示 {{pageFirstItem}}–{{pageLastItem}}，共 {{filteredEntryCount}} 个</text>
+      </view>
+      <view class="pagination-buttons">
+        <button class="pagination-button" data-action="first" bindtap="handlePageChange" disabled="{{currentPage === 1}}" aria-label="最前页">«</button>
+        <button class="pagination-button" data-action="previous" bindtap="handlePageChange" disabled="{{currentPage === 1}}" aria-label="上一页">‹</button>
+        <button class="pagination-button" data-action="next" bindtap="handlePageChange" disabled="{{currentPage === totalPages}}" aria-label="下一页">›</button>
+        <button class="pagination-button" data-action="last" bindtap="handlePageChange" disabled="{{currentPage === totalPages}}" aria-label="最后页">»</button>
+      </view>
+    </view>
+
+    <view wx:if="{{!filteredEntryCount}}" class="empty-state">
+      <text class="empty-symbol">Aa</text>
+      <text class="empty-title">{{search ? '没有匹配的单词' : '词库还是空的'}}</text>
+      <text>{{search ? '换一个关键词试试。' : '从今天遇见的第一个词开始。'}}</text>
+    </view>
+  </view>
+</view>

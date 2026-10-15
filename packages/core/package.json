@@ -1,0 +1,24 @@
+{
+  "name": "@wordbook/core",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly && vite build && node scripts/copy-mini.cjs",
+    "test": "npm run build && node --test test/*.test.cjs"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vite": "8.2.2"
+  }
+}

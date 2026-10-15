@@ -227,11 +227,15 @@
 .microsoft-mark i:nth-child(4) { background: #ffb900; }
 .login-divider { display: flex; align-items: center; gap: 9px; color: #596020; font-size: 11px; }
 .login-divider::before, .login-divider::after { height: 1px; flex: 1; content: ''; background: rgba(23, 23, 19, .25); }
+.cloud-user-controls { display: grid; justify-items: end; gap: 9px; }
 .cloud-actions, .login-form { display: flex; gap: 8px; }
 .cloud-actions button, .login-form button { display: inline-flex; height: 38px; padding: 0 13px; align-items: center; gap: 6px; color: var(--paper); font-size: 13px; background: var(--ink); border: 1px solid var(--ink); cursor: pointer; }
 .cloud-actions button:hover, .login-form button:hover { color: var(--ink); background: var(--coral); }
 .cloud-actions button:disabled, .login-form button:disabled { opacity: .55; cursor: wait; }
 .login-form input { width: min(260px, 36vw); height: 38px; padding: 0 11px; color: var(--ink); background: var(--paper); border: 1px solid var(--ink); outline: 0; }
+.account-link-code { display: flex; align-items: baseline; gap: 9px; font-family: var(--mono); }
+.account-link-code span, .account-link-code small { color: #596020; font-size: 10px; }
+.account-link-code strong { padding: 3px 7px; color: var(--paper); font-size: 16px; letter-spacing: 2px; background: var(--ink); }
 .sync-message { grid-column: 1 / -1; padding-top: 12px; white-space: pre-line; overflow-wrap: anywhere; border-top: 1px solid rgba(23, 23, 19, .25); }
 .sync-message.error { color: var(--coral-dark); }
 .intro { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 48px; padding: 88px 0 72px; }
@@ -519,7 +523,7 @@
   .cloud-panel { grid-template-columns: 1fr; padding: 20px; }
   .cloud-panel code { grid-column: auto; overflow-wrap: anywhere; }
   .login-options { width: 100%; }
-  .cloud-actions, .login-form { width: 100%; }
+  .cloud-user-controls, .cloud-actions, .login-form { width: 100%; }
   .login-form input { width: auto; min-width: 0; flex: 1; }
   .intro { grid-template-columns: 1fr; gap: 34px; padding: 56px 0 44px; }
   .app-shell h1 { font-size: clamp(43px, 13vw, 68px); }
@@ -611,6 +615,8 @@
   .sync-button span { display: none; }
   .sync-button { width: 38px; padding: 0; justify-content: center; }
   .cloud-actions, .login-form { flex-direction: column; }
+  .cloud-user-controls { justify-items: stretch; }
+  .account-link-code { justify-content: space-between; }
   .login-form input, .cloud-actions button, .login-form button { width: 100%; }
   .stats button { padding: 11px; }
   .stats span { font-size: 11px; }

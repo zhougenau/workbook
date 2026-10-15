@@ -1,3 +1,10 @@
+import {
+  analyzeVocabularyText,
+  filterAndSortVocabularyEntries,
+  paginate,
+  type MasteryFilter,
+  type VocabularySort,
+} from '@wordbook/core'
 import { type ChangeEvent, type FormEvent, useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import {
@@ -18,6 +25,7 @@ import {
   Edit3,
   ExternalLink,
   Layers3,
+  Link2,
   LogIn,
   LogOut,
   MessageCircle,
@@ -48,6 +56,7 @@ import type { MasteryChange } from './review'
 import { PassagePanel } from './PassagePanel'
 import { FlashcardPanel } from './FlashcardPanel'
 import { WordChatDialog } from './WordChatDialog'
+import { createAccountLinkCode, type AccountLinkCode } from './accountLink'
 import './App.css'
 
 const masteryLabels = ['未掌握', '刚认识', '有印象', '基本理解', '较熟练', '已掌握']
@@ -108,49 +117,6 @@ function formatCurrentTime(value: Date) {
   }).format(value)
 }
 
-function extractChineseMeaning(value: string) {
-  const normalized = value.replace(/\(([\u3400-\u9fff，、；：。！？／\s]+)\)/gu, '（$1）')
-  return normalized.match(/[\u3400-\u9fff（），、；：。！？／]+/gu)?.join('') ?? ''
-}
-
-function isLikelyEnglishExample(value: string) {
-  const words = value.match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/g) ?? []
-  return words.length >= 3 && /[.!?][”’"']?$/.test(value.trim())
-}
-
-function analyzeVocabularyText(source: string) {
-  const text = source.trim()
-  if (!text) return null
-
-  const exampleMarker = /(?:\*{0,2}(?:e\.?\s*g\.?|example|例句)\*{0,2})\s*[:：.]?\s*/i
-  const markerMatch = exampleMarker.exec(text)
-  const allLines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-  const inferredExampleIndex = markerMatch
-    ? -1
-    : allLines.findIndex((line, index) => index > 0 && isLikelyEnglishExample(line))
-  const beforeExample = markerMatch
-    ? text.slice(0, markerMatch.index).trim()
-    : inferredExampleIndex >= 0 ? allLines.slice(0, inferredExampleIndex).join('\n') : text
-  const example = markerMatch
-    ? text.slice(markerMatch.index + markerMatch[0].length).trim()
-    : inferredExampleIndex >= 0 ? allLines[inferredExampleIndex] : ''
-  const lines = beforeExample.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-  const heading = lines[0] ?? ''
-  const termMatch = heading.match(/^([A-Za-z][A-Za-z'’-]*(?:[ -][A-Za-z][A-Za-z'’-]*)*)\s*(?=(?:adj|adv|noun|verb|prep|pron|conj|interj|n|v)\b|$)/i)
-  const term = (termMatch?.[1] ?? heading.match(/[A-Za-z][A-Za-z'’-]*/)?.[0] ?? '').trim()
-  const headingRemainder = heading
-    .slice(termMatch?.[0].length ?? term.length)
-    .replace(/^(?:adj|adv|noun|verb|prep|pron|conj|interj|n|v)\.?\s*/i, '')
-    .trim()
-  const meaning = extractChineseMeaning([headingRemainder, ...lines.slice(1)]
-    .join(' ')
-    .replace(/^\/[^/\r\n]+\/\s*/, '')
-    .replace(/^(?:adj|adv|noun|verb|prep|pron|conj|interj|n|v)\.?\s*/i, '')
-    .trim())
-
-  return { term, meaning, example }
-}
-
 function pronounce(text: string) {
   if (!Reflect.has(window, 'speechSynthesis')) {
     window.alert('当前浏览器不支持语音朗读')
@@ -174,13 +140,15 @@ function App() {
   const [oauthStarting, setOauthStarting] = useState<'google' | 'azure' | null>(null)
   const [emailSending, setEmailSending] = useState(false)
   const [emailCooldown, setEmailCooldown] = useState(0)
+  const [accountLinkCode, setAccountLinkCode] = useState<AccountLinkCode | null>(null)
+  const [accountLinkLoading, setAccountLinkLoading] = useState(false)
   const [term, setTerm] = useState('')
   const [meaning, setMeaning] = useState('')
   const [note, setNote] = useState('')
   const [analysisSource, setAnalysisSource] = useState('')
   const [search, setSearch] = useState('')
-  const [masteryFilter, setMasteryFilter] = useState('all')
-  const [sort, setSort] = useState('newest')
+  const [masteryFilter, setMasteryFilter] = useState<MasteryFilter>('all')
+  const [sort, setSort] = useState<VocabularySort>('newest')
   const [pageSize, setPageSize] = useState(10)
   const [currentPage, setCurrentPage] = useState(1)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -688,6 +656,22 @@ function App() {
     }
   }
 
+  const generateAccountLinkCode = async () => {
+    if (!user || accountLinkLoading) return
+    setAccountLinkLoading(true)
+    setSyncMessage('正在生成微信绑定码…')
+    try {
+      const result = await createAccountLinkCode()
+      setAccountLinkCode(result)
+      setSyncMessage('绑定码已生成，请在微信小程序中输入。绑定码仅可使用一次。')
+    } catch (error) {
+      setSyncState('error')
+      setSyncMessage(error instanceof Error ? error.message : '创建微信绑定码失败')
+    } finally {
+      setAccountLinkLoading(false)
+    }
+  }
+
   const signOut = async () => {
     await supabase?.auth.signOut()
     setSyncState('local')
@@ -696,38 +680,17 @@ function App() {
     setPassageSelecting(false)
     setFlashcardSelecting(false)
     setSelectedWordIds([])
+    setAccountLinkCode(null)
   }
 
-  const normalizedSearch = search.trim().toLocaleLowerCase()
-  const visibleEntries = entries
-    .filter((entry) => {
-      const matchesText =
-        !normalizedSearch ||
-        [entry.term, entry.meaning, entry.note].some((value) =>
-          value.toLocaleLowerCase().includes(normalizedSearch),
-        )
-      const matchesMastery =
-        masteryFilter === 'all' ||
-        (masteryFilter === 'learning'
-          ? entry.mastery > 0 && entry.mastery < 5
-          : entry.mastery === Number(masteryFilter))
-      return matchesText && matchesMastery
-    })
-    .sort((left, right) => {
-      if (sort === 'oldest') return left.createdAt.localeCompare(right.createdAt)
-      if (sort === 'az') return left.term.localeCompare(right.term)
-      if (sort === 'mastery') return left.mastery - right.mastery
-      return right.createdAt.localeCompare(left.createdAt)
-    })
+  const visibleEntries = filterAndSortVocabularyEntries(entries, { search, masteryFilter, sort })
 
   const masteredCount = entries.filter((entry) => entry.mastery === 5).length
   const learningCount = entries.filter((entry) => entry.mastery > 0 && entry.mastery < 5).length
   const selectedWords = entries.filter((entry) => selectedWordIds.includes(entry.id))
   const selectingWords = reviewSelecting || passageSelecting || flashcardSelecting
-  const totalPages = Math.max(1, Math.ceil(visibleEntries.length / pageSize))
-  const activePage = Math.min(currentPage, totalPages)
-  const pageStart = (activePage - 1) * pageSize
-  const paginatedEntries = visibleEntries.slice(pageStart, pageStart + pageSize)
+  const pagination = paginate(visibleEntries, currentPage, pageSize)
+  const { currentPage: activePage, totalPages, items: paginatedEntries } = pagination
   const onlyPageWordsSelected = paginatedEntries.length > 0
     && selectedWordIds.length === paginatedEntries.length
     && paginatedEntries.every((entry) => selectedWordIds.includes(entry.id))
@@ -754,7 +717,7 @@ function App() {
         <button type="button" onClick={() => setCurrentPage(Math.min(totalPages, activePage + 1))} disabled={activePage === totalPages} aria-label="下一页" title="下一页"><ChevronRight size={18} /></button>
         <button type="button" onClick={() => setCurrentPage(totalPages)} disabled={activePage === totalPages} aria-label="最后页" title="最后页"><ChevronsRight size={18} /></button>
       </div>
-      <small>显示 {pageStart + 1}–{Math.min(pageStart + pageSize, visibleEntries.length)}，共 {visibleEntries.length} 个</small>
+      <small>显示 {pagination.firstItemNumber}–{pagination.lastItemNumber}，共 {pagination.totalItems} 个</small>
     </nav>
   )
 
@@ -806,9 +769,21 @@ function App() {
               </div>
             </div>
             {user ? (
-              <div className="cloud-actions">
-                <button type="button" onClick={() => void performSync(user)} disabled={syncState === 'syncing'}><RefreshCw size={16} />立即同步</button>
-                <button type="button" onClick={() => void signOut()}><LogOut size={16} />退出</button>
+              <div className="cloud-user-controls">
+                <div className="cloud-actions">
+                  <button type="button" onClick={() => void performSync(user)} disabled={syncState === 'syncing'}><RefreshCw size={16} />立即同步</button>
+                  <button type="button" onClick={() => void generateAccountLinkCode()} disabled={accountLinkLoading}>
+                    <Link2 size={16} />{accountLinkLoading ? '生成中…' : '绑定微信'}
+                  </button>
+                  <button type="button" onClick={() => void signOut()}><LogOut size={16} />退出</button>
+                </div>
+                {accountLinkCode && (
+                  <div className="account-link-code" role="status">
+                    <span>微信绑定码</span>
+                    <strong>{accountLinkCode.code}</strong>
+                    <small>{new Date(accountLinkCode.expiresAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} 前有效</small>
+                  </div>
+                )}
               </div>
             ) : isCloudConfigured ? (
               <div className="login-options">
@@ -925,7 +900,7 @@ function App() {
               {search && <button type="button" onClick={() => { setSearch(''); setCurrentPage(1) }} title="清除搜索"><X size={16} /></button>}
             </label>
             <label className="select-wrap">
-              <select value={masteryFilter} onChange={(event) => { setMasteryFilter(event.target.value); setCurrentPage(1) }} aria-label="按掌握度筛选">
+              <select value={masteryFilter} onChange={(event) => { setMasteryFilter(event.target.value as MasteryFilter); setCurrentPage(1) }} aria-label="按掌握度筛选">
                 <option value="all">全部程度</option>
                 <option value="learning">学习中 · 1–4</option>
                 {masteryLabels.map((label, index) => <option key={label} value={index}>{index} · {label}</option>)}
@@ -933,7 +908,7 @@ function App() {
               <ChevronDown size={16} />
             </label>
             <label className="select-wrap">
-              <select value={sort} onChange={(event) => { setSort(event.target.value); setCurrentPage(1) }} aria-label="排序方式">
+              <select value={sort} onChange={(event) => { setSort(event.target.value as VocabularySort); setCurrentPage(1) }} aria-label="排序方式">
                 <option value="newest">最近添加</option>
                 <option value="oldest">最早添加</option>
                 <option value="az">字母顺序</option>
@@ -1022,7 +997,7 @@ function App() {
                         <input type="checkbox" checked={selectedWordIds.includes(entry.id)} onChange={() => toggleSelectedWord(entry.id)} aria-label={`选择 ${entry.term} 进行${passageSelecting ? '短文生成' : flashcardSelecting ? '卡片学习' : '复习'}`} />
                         <span><Check size={15} /></span>
                       </label>
-                    ) : String(pageStart + index + 1).padStart(2, '0')}
+                    ) : String(pagination.startIndex + index + 1).padStart(2, '0')}
                   </div>
                   <div className="word-content">
                     <div className="word-title-row">

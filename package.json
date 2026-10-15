@@ -4,13 +4,16 @@
   "version": "1.7.0",
   "type": "module",
   "scripts": {
+    "predev": "npm --prefix packages/core run build",
     "dev": "vite",
+    "prebuild": "npm --prefix packages/core run build",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
+    "@wordbook/core": "file:packages/core",
     "dexie": "^4.4.5",
     "lucide-react": "^1.37.0",
     "react": "^19.2.8",

@@ -8,3 +8,24 @@ verify_jwt = false
 
 [functions.generate-passage]
 verify_jwt = false
+
+[functions.generate-flashcards]
+verify_jwt = false
+
+[functions.generate-speech]
+verify_jwt = false
+
+[functions.mini-health]
+verify_jwt = false
+
+[functions.wechat-login]
+verify_jwt = false
+
+[functions.mini-sync]
+verify_jwt = false
+
+[functions.create-link-code]
+verify_jwt = false
+
+[functions.link-wechat-account]
+verify_jwt = false

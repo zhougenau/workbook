@@ -1,0 +1,14 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "词屿",
+    "navigationBarBackgroundColor": "#f4f0e6",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f4f0e6",
+    "backgroundTextStyle": "dark"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}
