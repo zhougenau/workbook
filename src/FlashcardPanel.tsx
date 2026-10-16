@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { BrainCircuit, ChevronLeft, ChevronRight, Layers3, LoaderCircle, RotateCcw, Volume2, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { BrainCircuit, ChevronLeft, ChevronRight, Layers3, LoaderCircle, Pause, Play, RotateCcw, Volume2, X } from 'lucide-react'
 import { clampFlashcardIndex, selectFlashcardWords, type AiProvider, type Flashcard, type GeneratedFlashcards } from '@wordbook/core'
 import { generateFlashcards } from './flashcards'
 import type { VocabularyEntry } from './storage'
@@ -13,40 +13,87 @@ type FlashcardPanelProps = {
   onClose: () => void
 }
 
-function readFlashcard(card: Flashcard, showUnsupportedMessage = false) {
+function readFlashcard(card: Flashcard, showUnsupportedMessage = false, onEnded?: () => void, onError?: () => void) {
   if (!Reflect.has(window, 'speechSynthesis')) {
     if (showUnsupportedMessage) window.alert('当前浏览器不支持语音朗读')
-    return
+    return false
   }
   window.speechSynthesis.cancel()
   const utterance = new SpeechSynthesisUtterance(`${card.word}. ${card.usage}`)
   utterance.lang = 'en-US'
   utterance.rate = 0.85
+  if (onEnded) utterance.onend = onEnded
+  if (onError) utterance.onerror = onError
   window.speechSynthesis.speak(utterance)
+  return true
 }
 
 export function FlashcardPanel({ provider, allWords, selectedWords, prepareWords, onComplete, onClose }: FlashcardPanelProps) {
   const [result, setResult] = useState<GeneratedFlashcards | null>(null)
   const [studiedWordIds, setStudiedWordIds] = useState<string[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
+  const [randomCount, setRandomCount] = useState<10 | 20 | 50>(10)
+  const [autoplay, setAutoplay] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const activeRequest = useRef<AbortController | null>(null)
+  const autoplayActive = useRef(false)
+  const playbackId = useRef(0)
+  const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => () => {
     activeRequest.current?.abort()
+    playbackId.current += 1
+    autoplayActive.current = false
+    if (advanceTimer.current) clearTimeout(advanceTimer.current)
     window.speechSynthesis?.cancel()
+  }, [])
+
+  const stopAutoplay = () => {
+    playbackId.current += 1
+    autoplayActive.current = false
+    if (advanceTimer.current) clearTimeout(advanceTimer.current)
+    advanceTimer.current = null
+    window.speechSynthesis?.cancel()
+    setAutoplay(false)
+  }
+
+  const playCard = useCallback((nextCard: Flashcard, index: number, count: number) => {
+    const id = ++playbackId.current
+    const supported = readFlashcard(nextCard, false, () => {
+      if (!autoplayActive.current || id !== playbackId.current) return
+      if (index + 1 === count) {
+        autoplayActive.current = false
+        setAutoplay(false)
+        return
+      }
+      advanceTimer.current = setTimeout(() => {
+        advanceTimer.current = null
+        if (autoplayActive.current && id === playbackId.current) setActiveIndex(index + 1)
+      }, 3000)
+    }, () => {
+      if (autoplayActive.current && id === playbackId.current) {
+        autoplayActive.current = false
+        setAutoplay(false)
+      }
+    })
+    if (!supported && autoplayActive.current) {
+      autoplayActive.current = false
+      setAutoplay(false)
+      window.alert('当前浏览器不支持语音朗读')
+    }
   }, [])
 
   const createFlashcards = async () => {
     if (!allWords.length || loading) return
+    stopAutoplay()
     activeRequest.current?.abort()
     const request = new AbortController()
     activeRequest.current = request
     setLoading(true)
     setError('')
     try {
-      const sourceWords = selectFlashcardWords(allWords, selectedWords.map((word) => word.id))
+      const sourceWords = selectFlashcardWords(allWords, selectedWords.map((word) => word.id), randomCount)
       const idRemap = await prepareWords()
       request.signal.throwIfAborted()
       const wordIds = sourceWords.map((word) => idRemap[word.id] ?? word.id)
@@ -67,9 +114,24 @@ export function FlashcardPanel({ provider, allWords, selectedWords, prepareWords
 
   useEffect(() => {
     if (!card) return
-    readFlashcard(card)
+    playCard(card, activeIndex, result?.cards.length ?? 0)
     return () => window.speechSynthesis?.cancel()
-  }, [card])
+  }, [card, activeIndex, result?.cards.length, playCard])
+
+  const toggleAutoplay = () => {
+    if (autoplayActive.current) {
+      stopAutoplay()
+    } else if (card && result) {
+      autoplayActive.current = true
+      setAutoplay(true)
+      playCard(card, activeIndex, result.cards.length)
+    }
+  }
+
+  const navigateTo = (index: number) => {
+    stopAutoplay()
+    setActiveIndex(clampFlashcardIndex(index, result?.cards.length ?? 0))
+  }
 
   return (
     <section id="flashcard-panel" className="review-panel flashcard-panel" aria-labelledby="flashcard-panel-title">
@@ -77,15 +139,21 @@ export function FlashcardPanel({ provider, allWords, selectedWords, prepareWords
         <div>
           <span className="review-kicker"><Layers3 size={16} />AI FLASHCARDS</span>
           <h3 id="flashcard-panel-title">用单词卡片集中学习</h3>
-          <p>{selectedWords.length ? `将为已选择的 ${selectedWords.length} 个单词生成卡片。` : `未选择单词，将从单词本随机抽取 ${Math.min(10, allWords.length)} 个。`}</p>
+          <p>{selectedWords.length ? `将为已选择的 ${selectedWords.length} 个单词生成卡片。` : `未选择单词，将从单词本随机抽取 ${Math.min(randomCount, allWords.length)} 个。`}</p>
         </div>
-        <button className="review-close" type="button" onClick={onClose} title="退出卡片学习" aria-label="退出卡片学习"><X size={18} /></button>
+        <button className="review-close" type="button" onClick={() => { stopAutoplay(); onClose() }} title="退出卡片学习" aria-label="退出卡片学习"><X size={18} /></button>
       </div>
 
       <div className="flashcard-actions">
+        <label className="flashcard-count">
+          <span>随机卡片数量</span>
+          <select value={randomCount} onChange={(event) => setRandomCount(Number(event.target.value) as 10 | 20 | 50)} disabled={loading || selectedWords.length > 0}>
+            {[10, 20, 50].map((count) => <option key={count} value={count}>{count}</option>)}
+          </select>
+        </label>
         <button className="generate-review-button" type="button" onClick={() => void createFlashcards()} disabled={loading || !allWords.length}>
           {loading ? <LoaderCircle className="spin" size={18} /> : result ? <RotateCcw size={18} /> : <Layers3 size={18} />}
-          {loading ? '正在生成…' : result ? '重新生成' : selectedWords.length ? '生成所选卡片' : '随机生成 10 张'}
+          {loading ? '正在生成…' : result ? '重新生成' : selectedWords.length ? '生成所选卡片' : `随机生成 ${Math.min(randomCount, allWords.length)} 张`}
         </button>
       </div>
 
@@ -95,12 +163,17 @@ export function FlashcardPanel({ provider, allWords, selectedWords, prepareWords
         <div className="flashcard-study" aria-live="polite">
           <div className="flashcard-progress">
             <span>FLASHCARD</span>
-            <strong>{activeIndex + 1} / {result.cards.length}</strong>
+            <div className="flashcard-progress-actions">
+              <strong>{activeIndex + 1} / {result.cards.length}</strong>
+              <button type="button" onClick={toggleAutoplay} title={autoplay ? '暂停自动播放' : '自动播放卡片'} aria-label={autoplay ? '暂停自动播放' : '自动播放卡片'} aria-pressed={autoplay}>
+                {autoplay ? <Pause size={16} /> : <Play size={16} />}
+              </button>
+            </div>
           </div>
           <article className="flashcard">
             <div className="flashcard-word-row">
               <h4>{card.word}</h4>
-              <button type="button" onClick={() => readFlashcard(card, true)} title={`重新朗读 ${card.word} 和用法`} aria-label={`重新朗读 ${card.word} 和用法`}><Volume2 size={18} /></button>
+              <button type="button" onClick={() => { stopAutoplay(); readFlashcard(card, true) }} title={`重新朗读 ${card.word} 和用法`} aria-label={`重新朗读 ${card.word} 和用法`}><Volume2 size={18} /></button>
             </div>
             <div><span>释义</span><p>{card.meaning}</p></div>
             <div><span>用法</span><p lang="en">{card.usage}</p></div>
@@ -116,12 +189,12 @@ export function FlashcardPanel({ provider, allWords, selectedWords, prepareWords
             </div>
           </article>
           <div className="flashcard-navigation">
-            <button type="button" onClick={() => setActiveIndex((index) => clampFlashcardIndex(index - 1, result.cards.length))} disabled={activeIndex === 0}><ChevronLeft size={18} />上一张</button>
-            <div>{result.cards.map((item, index) => <button key={item.wordId} type="button" className={index === activeIndex ? 'active' : ''} onClick={() => setActiveIndex(index)} aria-label={`查看第 ${index + 1} 张：${item.word}`} aria-pressed={index === activeIndex} />)}</div>
+            <button type="button" onClick={() => navigateTo(activeIndex - 1)} disabled={activeIndex === 0}><ChevronLeft size={18} />上一张</button>
+            <div>{result.cards.map((item, index) => <button key={item.wordId} type="button" className={index === activeIndex ? 'active' : ''} onClick={() => navigateTo(index)} aria-label={`查看第 ${index + 1} 张：${item.word}`} aria-pressed={index === activeIndex} />)}</div>
             {activeIndex === result.cards.length - 1 ? (
-              <button className="flashcard-test-button" type="button" onClick={() => onComplete(studiedWordIds)} disabled={!studiedWordIds.length}>开始 AI 测试<BrainCircuit size={18} /></button>
+              <button className="flashcard-test-button" type="button" onClick={() => { stopAutoplay(); onComplete(studiedWordIds) }} disabled={!studiedWordIds.length}>开始 AI 测试<BrainCircuit size={18} /></button>
             ) : (
-              <button type="button" onClick={() => setActiveIndex((index) => clampFlashcardIndex(index + 1, result.cards.length))}>下一张<ChevronRight size={18} /></button>
+              <button type="button" onClick={() => navigateTo(activeIndex + 1)}>下一张<ChevronRight size={18} /></button>
             )}
           </div>
           <dl className="review-token-usage" aria-label="本次 AI Token 用量">

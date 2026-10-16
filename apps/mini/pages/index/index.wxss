@@ -5,6 +5,19 @@
   background-color: #f4f0e6;
 }
 
+.app-meta {
+  display: flex;
+  margin-top: 28rpx;
+  padding-top: 20rpx;
+  flex-wrap: wrap;
+  justify-content: center;
+  column-gap: 18rpx;
+  row-gap: 6rpx;
+  border-top: 1rpx solid #c9c4b8;
+  color: #74766e;
+  font-size: 20rpx;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -50,6 +63,29 @@
   font-size: 24rpx;
   font-weight: 700;
 }
+
+.connection-toggle {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 72rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 2rpx solid #c9c4b8;
+  border-radius: 0;
+  background: transparent;
+  color: #20231f;
+  text-align: left;
+}
+
+.connection-toggle::after { border: 0; }
+.connection-toggle .status-dot { margin-left: 2rpx; }
+.connection-toggle-title { flex: 1; font-size: 23rpx; font-weight: 700; }
+.connection-toggle-status { margin-right: 18rpx; color: #74766e; font-size: 20rpx; }
+.connection-toggle-arrow { font-size: 27rpx; line-height: 1; }
+.connection-toggle-arrow--open { transform: rotate(180deg); }
 
 .connection-strip {
   padding: 18rpx 0 26rpx;
@@ -189,12 +225,32 @@
 
 .section-heading--library {
   margin-bottom: 20rpx;
+  flex-wrap: wrap;
+  row-gap: 12rpx;
+}
+
+.section-heading--library > view:first-of-type {
+  min-width: 0;
+  flex: 1;
+}
+
+.section-heading--capture > view:first-of-type {
+  min-width: 0;
+  flex: 1;
+}
+
+.section-heading > .selection-actions {
+  margin-left: auto;
+  width: 100%;
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 8rpx;
 }
 
 .selection-done {
   flex: 0 0 auto;
   height: 50rpx;
-  margin: 0 0 0 auto;
+  margin: 0;
   padding: 0 14rpx;
   border: 1rpx solid #20231f;
   border-radius: 0;
@@ -202,6 +258,10 @@
   color: #20231f;
   font-size: 20rpx;
   line-height: 48rpx;
+}
+
+.selection-all {
+  background: transparent;
 }
 
 .section-index {
@@ -324,6 +384,42 @@
   margin-top: 42rpx;
   border-top: 4rpx solid #20231f;
 }
+
+.section-toggle {
+  box-sizing: border-box;
+  flex: 0 0 52rpx;
+  width: 52rpx;
+  height: 52rpx;
+  margin: 0 0 0 12rpx;
+  padding: 0;
+  border: 1rpx solid #20231f;
+  border-radius: 0;
+  background: transparent;
+  color: #20231f;
+  font-size: 28rpx;
+  line-height: 50rpx;
+}
+
+.section-toggle::after { border: 0; }
+.section-toggle-arrow { display: block; }
+.section-toggle-arrow--open { transform: rotate(180deg); }
+
+.collapsed-flashcards {
+  box-sizing: border-box;
+  width: 100%;
+  height: 64rpx;
+  margin: 0;
+  padding: 0;
+  border: 1rpx solid #20231f;
+  border-radius: 4rpx;
+  background: #dbe783;
+  color: #20231f;
+  font-size: 21rpx;
+  font-weight: 700;
+  line-height: 62rpx;
+}
+
+.collapsed-flashcards[disabled] { opacity: .45; }
 
 .ai-toolbar {
   padding: 18rpx 0 24rpx;
@@ -503,6 +599,7 @@
 }
 
 .passage-translation text:last-child {
+  color: #20231f;
   font-size: 23rpx;
   line-height: 1.7;
   white-space: pre-wrap;
@@ -517,6 +614,7 @@
 
 .used-words text {
   padding: 5rpx 9rpx;
+  color: #20231f;
   border: 1rpx solid #20231f;
   background: #dbe783;
   font-family: monospace;
@@ -533,7 +631,9 @@
 .flashcard-result-heading {
   display: flex;
   align-items: flex-start;
+  flex-wrap: wrap;
   justify-content: space-between;
+  gap: 10rpx;
 }
 
 .flashcard-result-heading > view:first-child {
@@ -555,9 +655,47 @@
   font-weight: 700;
 }
 
+.flashcard-playback {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 56rpx;
+  min-width: 0;
+  width: 56rpx;
+  height: 56rpx;
+  margin: 0;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid #5e5a54;
+  border-radius: 0;
+  background: transparent;
+}
+
+.flashcard-playback-icon {
+  width: 0;
+  height: 0;
+  margin-left: 5rpx;
+  border-top: 11rpx solid transparent;
+  border-bottom: 11rpx solid transparent;
+  border-left: 17rpx solid #dbe783;
+}
+
+.flashcard-playback.active .flashcard-playback-icon {
+  width: 16rpx;
+  height: 22rpx;
+  margin-left: 0;
+  border: 0;
+  border-left: 5rpx solid #dbe783;
+  border-right: 5rpx solid #dbe783;
+  box-sizing: border-box;
+}
+
 .flashcard-close {
-  width: 58rpx;
-  height: 58rpx;
+  box-sizing: border-box;
+  flex: 0 0 56rpx;
+  min-width: 0;
+  width: 56rpx;
+  height: 56rpx;
   margin: 0;
   padding: 0;
   border: 1rpx solid #5e5a54;
@@ -565,7 +703,7 @@
   background: transparent;
   color: #fffaf0;
   font-size: 34rpx;
-  line-height: 56rpx;
+  line-height: 54rpx;
 }
 
 .flashcard-sheet {

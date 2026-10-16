@@ -8,7 +8,14 @@
     <text class="entry-total">{{entries.length}} 词</text>
   </view>
 
-  <view class="connection-strip">
+  <button class="connection-toggle" bindtap="toggleConnectionDetails" aria-label="{{connectionExpanded ? '收起登录与同步信息' : '展开登录与同步信息'}}" aria-expanded="{{connectionExpanded}}">
+    <view class="status-dot status-dot--{{syncStatus === 'error' ? 'error' : loginStatus}}"></view>
+    <text class="connection-toggle-title">登录与同步</text>
+    <text class="connection-toggle-status">{{syncStatus === 'error' ? '同步异常' : loginStatus === 'ok' ? '已连接' : '未连接'}}</text>
+    <text class="connection-toggle-arrow {{connectionExpanded ? 'connection-toggle-arrow--open' : ''}}">⌄</text>
+  </button>
+
+  <view wx:if="{{connectionExpanded}}" class="connection-strip">
     <view class="connection-item">
       <view class="status-dot status-dot--{{healthStatus}}"></view>
       <view class="connection-copy">
@@ -35,7 +42,7 @@
     </view>
   </view>
 
-  <view wx:if="{{loginStatus === 'ok'}}" class="account-link-section">
+  <view wx:if="{{connectionExpanded && loginStatus === 'ok'}}" class="account-link-section">
     <view class="account-link-heading">
       <view class="status-dot status-dot--{{linkStatus}}"></view>
       <view>
@@ -56,14 +63,18 @@
   </view>
 
   <view class="capture-section">
-    <view class="section-heading">
+    <view class="section-heading section-heading--capture">
       <text class="section-index">01</text>
       <view>
         <text class="section-title">记下新单词</text>
         <text class="section-note">先落笔，再慢慢理解。</text>
       </view>
+      <button class="section-toggle" bindtap="toggleCapture" aria-label="{{captureExpanded ? '收起记下新单词' : '展开记下新单词'}}" aria-expanded="{{captureExpanded}}">
+        <text class="section-toggle-arrow {{captureExpanded ? 'section-toggle-arrow--open' : ''}}">⌄</text>
+      </button>
     </view>
 
+    <view wx:if="{{captureExpanded}}" class="capture-content">
     <view class="analyzer">
       <view class="field-heading">
         <text>智能选取</text>
@@ -96,6 +107,7 @@
       <button class="primary-button" bindtap="addEntry">＋ 收录单词</button>
     </view>
     <view wx:if="{{message}}" class="message">{{message}}</view>
+    </view>
   </view>
 
   <view id="ai-review-section" class="ai-section">
@@ -105,8 +117,14 @@
         <text class="section-title">AI 学习工坊</text>
         <text class="section-note">已选择 {{aiSelectedIds.length}} 个单词，单次最多 10 个。</text>
       </view>
+      <button class="section-toggle" bindtap="toggleAiWorkshop" aria-label="{{aiWorkshopExpanded ? '收起 AI 学习工坊' : '展开 AI 学习工坊'}}" aria-expanded="{{aiWorkshopExpanded}}">
+        <text class="section-toggle-arrow {{aiWorkshopExpanded ? 'section-toggle-arrow--open' : ''}}">⌄</text>
+      </button>
     </view>
 
+    <button wx:if="{{!aiWorkshopExpanded}}" class="collapsed-flashcards" bindtap="createRandomFlashcards" disabled="{{!entries.length || aiStatus === 'checking'}}">随机卡片</button>
+
+    <view wx:if="{{aiWorkshopExpanded}}" class="ai-workshop-content">
     <view class="ai-toolbar">
       <view class="ai-word-picker">
         <text class="ai-picker-label">{{entries.length ? '本次学习词汇' : '请先在下方收录单词'}}</text>
@@ -132,6 +150,14 @@
           <button class="{{aiDifficulty === 'basic' ? 'active' : ''}}" data-difficulty="basic" bindtap="chooseAiDifficulty">基础</button>
           <button class="{{aiDifficulty === 'intermediate' ? 'active' : ''}}" data-difficulty="intermediate" bindtap="chooseAiDifficulty">进阶</button>
           <button class="{{aiDifficulty === 'advanced' ? 'active' : ''}}" data-difficulty="advanced" bindtap="chooseAiDifficulty">挑战</button>
+        </view>
+      </view>
+      <view class="ai-control-row">
+        <text>随机卡片数量</text>
+        <view class="segmented-control">
+          <button class="{{randomFlashcardCount === 10 ? 'active' : ''}}" data-count="10" bindtap="chooseRandomFlashcardCount">10</button>
+          <button class="{{randomFlashcardCount === 20 ? 'active' : ''}}" data-count="20" bindtap="chooseRandomFlashcardCount">20</button>
+          <button class="{{randomFlashcardCount === 50 ? 'active' : ''}}" data-count="50" bindtap="chooseRandomFlashcardCount">50</button>
         </view>
       </view>
       <view class="ai-actions">
@@ -165,16 +191,19 @@
           <picker mode="selector" range="{{speechRateLabels}}" value="{{speechRateIndex}}" bindchange="handleSpeechRateChange" aria-label="朗读语速">
             <view class="speech-rate-picker speech-rate-picker--dark">语速 {{speechRateLabels[speechRateIndex]}} <text>⌄</text></view>
           </picker>
+          <button class="flashcard-playback {{flashcardAutoplay ? 'active' : ''}}" bindtap="toggleFlashcardAutoplay" aria-label="{{flashcardAutoplay ? '暂停自动播放' : '自动播放卡片'}}" title="{{flashcardAutoplay ? '暂停自动播放' : '自动播放卡片'}}">
+            <view class="flashcard-playback-icon" />
+          </button>
           <button class="flashcard-close" bindtap="closeFlashcards" aria-label="退出卡片学习">×</button>
         </view>
       </view>
 
-      <view class="flashcard-sheet">
+      <view class="flashcard-sheet" bindtouchstart="startFlashcardSwipe" bindtouchend="endFlashcardSwipe" bindtouchcancel="cancelFlashcardSwipe">
         <view class="flashcard-word-row">
           <text class="flashcard-word">{{currentFlashcard.word}}</text>
           <button
             class="flashcard-speech {{speechSource === 'flashcard' && speechStatus === 'playing' ? 'active' : ''}}"
-            bindtap="speakFlashcard"
+            bindtap="tapFlashcardSpeech"
             loading="{{speechSource === 'flashcard' && speechStatus === 'loading'}}"
             aria-label="{{speechSource === 'flashcard' && speechStatus === 'playing' ? '停止发音' : '朗读单词和例句'}}"
           >{{speechSource === 'flashcard' && speechStatus === 'playing' ? '停止' : speechSource === 'flashcard' && speechStatus === 'loading' ? '加载中' : '发音'}}</button>
@@ -284,6 +313,7 @@
         <text class="quiz-restart-hint">重新点击“生成复习题”可开始新一轮。</text>
       </view>
     </view>
+    </view>
   </view>
 
   <view class="library-section">
@@ -293,7 +323,10 @@
         <text class="section-title">我的词库</text>
         <text class="section-note">选择单词用于 AI 学习，熟练度从 0 到 5 逐步积累。</text>
       </view>
-      <button wx:if="{{selectionMode}}" class="selection-done" bindtap="finishWordSelection" aria-label="完成选择并保留所选单词">完成</button>
+      <view wx:if="{{selectionMode}}" class="selection-actions">
+        <button class="selection-done selection-all" bindtap="selectVisibleWords" disabled="{{!visibleEntries.length}}" aria-label="{{pageSelectionComplete ? '取消全部已选单词' : '本页全选，单次最多 10 个单词'}}">{{pageSelectionComplete ? '取消全选' : '本页全选'}}</button>
+        <button class="selection-done" bindtap="finishWordSelection" aria-label="完成选择并保留所选单词">完成</button>
+      </view>
     </view>
 
     <view class="search-box">
@@ -384,6 +417,10 @@
       <text class="empty-title">{{search ? '没有匹配的单词' : '词库还是空的'}}</text>
       <text>{{search ? '换一个关键词试试。' : '从今天遇见的第一个词开始。'}}</text>
     </view>
+  </view>
+  <view class="app-meta" aria-label="版本信息">
+    <text>版本 v{{appVersion}}</text>
+    <text>最后更新 {{appUpdatedAt}}</text>
   </view>
 </view>
 

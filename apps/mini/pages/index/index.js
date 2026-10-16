@@ -65,6 +65,8 @@ function decorateQuiz(quiz) {
 Page({
   data: {
     entries: [],
+    appVersion: '1.7.0',
+    appUpdatedAt: '2026-10-16',
     visibleEntries: [],
     search: '',
     masteryFilter: 'all',
@@ -92,8 +94,10 @@ Page({
     editError: '',
     analysisSource: '',
     message: '',
+    captureExpanded: false,
     healthStatus: 'idle',
     healthMessage: '尚未检测 Supabase',
+    connectionExpanded: false,
     loginStatus: 'idle',
     loginMessage: '尚未连接微信身份',
     syncStatus: 'idle',
@@ -102,12 +106,15 @@ Page({
     linkStatus: 'idle',
     linkMessage: '在 Web 词屿生成一次性绑定码',
     aiSelectedIds: [],
+    pageSelectionComplete: false,
+    aiWorkshopExpanded: false,
     selectionMode: false,
     aiProviders: AI_PROVIDERS,
     aiProviderIndex: 0,
     aiProvider: DEFAULT_AI_PROVIDER,
     aiLength: 'short',
     aiDifficulty: 'basic',
+    randomFlashcardCount: 10,
     aiStatus: 'idle',
     aiMessage: '从词库选择单词，生成专属学习材料',
     chatWord: null,
@@ -123,6 +130,7 @@ Page({
     flashcardWordIds: [],
     flashcardIndex: 0,
     currentFlashcard: null,
+    flashcardAutoplay: false,
     speechStatus: 'idle',
     speechText: '',
     speechSource: '',
@@ -145,7 +153,11 @@ Page({
   onLoad() {
     this.chatRequestId = 0
     this.speechCache = Object.create(null)
+    this.speechRequests = Object.create(null)
+    this.speechPrefetchGeneration = 0
     this.speechRequestId = 0
+    this.autoplaySequence = 0
+    this.autoplayTimer = null
     const savedSpeechRateIndex = speechRates.indexOf(Number(wx.getStorageSync(SPEECH_RATE_KEY)))
     const speechRateIndex = savedSpeechRateIndex < 0 ? 1 : savedSpeechRateIndex
     const aiProvider = normalizeAiProvider(wx.getStorageSync(AI_PROVIDER_KEY))
@@ -167,8 +179,26 @@ Page({
     this.chatRequestId += 1
     if (this.syncTimer) clearTimeout(this.syncTimer)
     if (this.advanceTimer) clearTimeout(this.advanceTimer)
+    this.stopFlashcardAutoplay()
+    this.cancelSpeechPrefetch()
     this.speechRequestId += 1
     destroySpeech()
+  },
+
+  toggleConnectionDetails() {
+    this.setData({ connectionExpanded: !this.data.connectionExpanded })
+  },
+
+  toggleCapture() {
+    this.setData({ captureExpanded: !this.data.captureExpanded })
+  },
+
+  toggleAiWorkshop() {
+    if (this.data.aiWorkshopExpanded) {
+      this.stopFlashcardAutoplay()
+      this.stopFlashcardSpeech()
+    }
+    this.setData({ aiWorkshopExpanded: !this.data.aiWorkshopExpanded })
   },
 
   refreshEntries() {
@@ -182,6 +212,7 @@ Page({
     this.setData({
       entries,
       visibleEntries: pagination.items,
+      pageSelectionComplete: pagination.items.length > 0 && pagination.items.slice(0, 10).every((entry) => entry.aiSelected),
       currentPage: pagination.currentPage,
       totalPages: pagination.totalPages,
       filteredEntryCount: pagination.totalItems,
@@ -250,21 +281,16 @@ Page({
     this.setData({ linkCode: formatted })
   },
 
-  toggleAiWord(event) {
+  setAiSelection(selectedIds, aiMessage = this.data.aiMessage) {
     if (this.advanceTimer) {
       clearTimeout(this.advanceTimer)
       this.advanceTimer = null
     }
-    const { id } = event.currentTarget.dataset
-    const selected = new Set(this.data.aiSelectedIds)
-    if (selected.has(id)) selected.delete(id)
-    else if (selected.size < 10) selected.add(id)
-    else {
-      this.setData({ aiMessage: '小程序单次最多选择 10 个单词' })
-      return
-    }
+    this.stopFlashcardAutoplay()
+    this.cancelSpeechPrefetch()
     this.setData({
-      aiSelectedIds: [...selected],
+      aiSelectedIds: selectedIds,
+      aiMessage,
       passage: null,
       flashcards: null,
       flashcardWordIds: [],
@@ -279,10 +305,36 @@ Page({
     }, () => this.refreshEntries())
   },
 
+  toggleAiWord(event) {
+    const { id } = event.currentTarget.dataset
+    const selected = new Set(this.data.aiSelectedIds)
+    if (selected.has(id)) selected.delete(id)
+    else if (selected.size < 10) selected.add(id)
+    else {
+      this.setData({ aiMessage: '小程序单次最多选择 10 个单词' })
+      return
+    }
+    this.setAiSelection([...selected])
+  },
+
+  selectVisibleWords() {
+    if (this.data.pageSelectionComplete) {
+      this.setAiSelection([], '已取消全部选中单词')
+      return
+    }
+    const selected = new Set(this.data.aiSelectedIds)
+    const pageIds = this.data.visibleEntries.slice(0, 10).map((entry) => entry.id)
+    const remaining = pageIds.filter((id) => !selected.has(id))
+    const replaced = selected.size + remaining.length > 10
+    this.setAiSelection(replaced ? pageIds : [...selected, ...remaining], replaced ? '已切换为本页单词' : '本页单词已全部选中')
+    if (replaced) wx.showToast({ title: '已切换为本页单词', icon: 'none' })
+    else if (this.data.visibleEntries.length > 10) wx.showToast({ title: '本页最多选 10 个', icon: 'none' })
+  },
+
   beginWordSelection(event) {
     const { id } = event.currentTarget.dataset
     if (!this.data.entries.some((entry) => entry.id === id)) return
-    this.setData({ selectionMode: true })
+    this.setData({ selectionMode: true, aiWorkshopExpanded: true })
     if (this.data.aiSelectedIds.includes(id)) return
     this.toggleAiWord(event)
   },
@@ -299,6 +351,11 @@ Page({
 
   chooseAiDifficulty(event) {
     this.setData({ aiDifficulty: event.currentTarget.dataset.difficulty })
+  },
+
+  chooseRandomFlashcardCount(event) {
+    const count = Number(event.currentTarget.dataset.count)
+    if ([10, 20, 50].includes(count)) this.setData({ randomFlashcardCount: count })
   },
 
   chooseAiProvider(event) {
@@ -375,6 +432,8 @@ Page({
 
   async createPassage() {
     if (this.data.aiStatus === 'checking') return
+    this.stopFlashcardAutoplay()
+    this.cancelSpeechPrefetch()
     this.setData({
       aiStatus: 'checking',
       aiMessage: 'AI 正在编织短文…',
@@ -393,6 +452,8 @@ Page({
 
   async createReview() {
     if (this.data.aiStatus === 'checking') return
+    this.stopFlashcardAutoplay()
+    this.cancelSpeechPrefetch()
     if (this.advanceTimer) {
       clearTimeout(this.advanceTimer)
       this.advanceTimer = null
@@ -437,14 +498,22 @@ Page({
       wx.showToast({ title: '请先连接微信身份', icon: 'none' })
       return
     }
-    this.setData({ aiSelectedIds: [id], aiDifficulty: 'basic', quiz: null, currentQuestion: null }, () => {
+    this.setData({ aiSelectedIds: [id], aiWorkshopExpanded: true, aiDifficulty: 'basic', quiz: null, currentQuestion: null }, () => {
+      this.refreshEntries()
       wx.pageScrollTo({ selector: '#ai-review-section', duration: 300 })
       this.createReview()
     })
   },
 
-  async createFlashcards() {
+  createRandomFlashcards() {
     if (this.data.aiStatus === 'checking') return
+    this.setData({ aiWorkshopExpanded: true }, () => this.createFlashcards(true))
+  },
+
+  async createFlashcards(randomOnly = false) {
+    if (this.data.aiStatus === 'checking') return
+    this.stopFlashcardAutoplay()
+    this.cancelSpeechPrefetch()
     this.setData({
       aiStatus: 'checking',
       aiMessage: 'AI 正在制作学习卡片…',
@@ -454,7 +523,7 @@ Page({
     })
     try {
       if (!loadSession()) throw new Error('请先连接微信身份')
-      const sourceWords = selectFlashcardWords(loadEntries(), this.data.aiSelectedIds)
+      const sourceWords = selectFlashcardWords(loadEntries(), randomOnly === true ? [] : this.data.aiSelectedIds, this.data.randomFlashcardCount)
       if (!sourceWords.length) throw new Error('请先在词库收录单词')
       await this.synchronize(false)
       const wordIds = sourceWords.map((word) => word.id)
@@ -466,7 +535,10 @@ Page({
         flashcardWordIds: wordIds,
         flashcardIndex: 0,
         currentFlashcard: flashcards.cards[0],
-      }, () => this.speakFlashcard())
+      }, () => {
+        if (this.data.aiWorkshopExpanded) this.speakFlashcard()
+        this.prefetchFlashcardSpeech(flashcards.cards.slice(1))
+      })
     } catch (error) {
       this.setData({ aiStatus: 'error', aiMessage: error.message || 'AI 卡片生成失败' })
     }
@@ -476,16 +548,97 @@ Page({
     const flashcards = this.data.flashcards
     if (!flashcards || !flashcards.cards.length) return
     const flashcardIndex = clampFlashcardIndex(index, flashcards.cards.length)
+    this.stopFlashcardAutoplay()
     this.stopFlashcardSpeech()
     this.setData({ flashcardIndex, currentFlashcard: flashcards.cards[flashcardIndex] }, () => this.speakFlashcard())
   },
 
-  async speakFlashcard() {
+  async speakFlashcard(callbacks = {}) {
     const card = this.data.currentFlashcard
-    if (card) await this.speakText(`${card.word}. ${card.usage}`, 'flashcard', '')
+    if (card) await this.speakText(`${card.word}. ${card.usage}`, 'flashcard', '', callbacks)
+  },
+
+  stopFlashcardAutoplay() {
+    this.autoplaySequence += 1
+    if (this.autoplayTimer) clearTimeout(this.autoplayTimer)
+    this.autoplayTimer = null
+    if (this.data.flashcardAutoplay) this.setData({ flashcardAutoplay: false })
+  },
+
+  toggleFlashcardAutoplay() {
+    if (this.data.flashcardAutoplay) {
+      this.stopFlashcardAutoplay()
+      this.stopFlashcardSpeech()
+      return
+    }
+    if (!this.data.flashcards || !this.data.currentFlashcard) return
+    this.stopFlashcardSpeech()
+    const sequence = ++this.autoplaySequence
+    this.setData({ flashcardAutoplay: true }, () => this.playCurrentFlashcardAutomatically(sequence))
+  },
+
+  playCurrentFlashcardAutomatically(sequence) {
+    this.speakFlashcard({
+      onEnded: () => {
+        if (sequence !== this.autoplaySequence || !this.data.flashcardAutoplay) return
+        if (this.data.flashcardIndex + 1 === this.data.flashcards.cards.length) {
+          this.stopFlashcardAutoplay()
+          return
+        }
+        this.autoplayTimer = setTimeout(() => {
+          this.autoplayTimer = null
+          if (sequence !== this.autoplaySequence || !this.data.flashcardAutoplay) return
+          this.stopFlashcardSpeech()
+          const nextIndex = this.data.flashcardIndex + 1
+          this.setData({ flashcardIndex: nextIndex, currentFlashcard: this.data.flashcards.cards[nextIndex] }, () => this.playCurrentFlashcardAutomatically(sequence))
+        }, 3000)
+      },
+      onError: () => {
+        if (sequence === this.autoplaySequence) this.stopFlashcardAutoplay()
+      },
+    })
+  },
+
+  tapFlashcardSpeech() {
+    this.stopFlashcardAutoplay()
+    this.speakFlashcard()
+  },
+
+  cancelSpeechPrefetch() {
+    this.speechPrefetchGeneration += 1
+    this.speechRequests = Object.create(null)
+  },
+
+  async getSpeechAudio(text) {
+    if (this.speechCache[text]) return this.speechCache[text]
+    if (this.speechRequests[text]) return this.speechRequests[text]
+    const generation = this.speechPrefetchGeneration
+    const request = generateSpeech(text).then((result) => {
+      if (generation === this.speechPrefetchGeneration) this.speechCache[text] = result.audio
+      return result.audio
+    })
+    this.speechRequests[text] = request
+    try {
+      return await request
+    } finally {
+      if (this.speechRequests[text] === request) delete this.speechRequests[text]
+    }
+  },
+
+  prefetchFlashcardSpeech(cards) {
+    const generation = this.speechPrefetchGeneration
+    let nextIndex = 0
+    const prefetch = async () => {
+      while (generation === this.speechPrefetchGeneration && nextIndex < cards.length) {
+        const card = cards[nextIndex++]
+        await this.getSpeechAudio(`${card.word}. ${card.usage}`).catch(() => null)
+      }
+    }
+    for (let worker = 0; worker < Math.min(2, cards.length); worker += 1) prefetch()
   },
 
   async speakWord(event) {
+    this.stopFlashcardAutoplay()
     const entry = this.data.entries.find((item) => item.id === event.currentTarget.dataset.id)
     if (!entry) return
     const example = entry.note.split(/\r?\n/).map((line) => line.trim())
@@ -494,7 +647,7 @@ Page({
     await this.speakText(fullText.length <= 500 ? fullText : entry.term, 'word', entry.id)
   },
 
-  async speakText(text, source, wordId) {
+  async speakText(text, source, wordId, callbacks = {}) {
     if (!text) return
     if (this.data.speechText === text && this.data.speechSource === source && this.data.speechStatus === 'loading') return
     if (this.data.speechText === text && this.data.speechSource === source && this.data.speechStatus === 'playing') {
@@ -506,20 +659,18 @@ Page({
     stopSpeech()
     this.setData({ speechStatus: 'loading', speechText: text, speechSource: source, speechWordId: wordId })
     try {
-      let audio = this.speechCache[text]
-      if (!audio) {
-        const result = await generateSpeech(text)
-        audio = result.audio
-        this.speechCache[text] = audio
-      }
+      const audio = await this.getSpeechAudio(text)
       if (requestId !== this.speechRequestId) return
       await playSpeech(audio, {
         onEnded: () => {
-          if (requestId === this.speechRequestId) this.setData({ speechStatus: 'idle', speechText: '', speechSource: '', speechWordId: '' })
+          if (requestId !== this.speechRequestId) return
+          this.setData({ speechStatus: 'idle', speechText: '', speechSource: '', speechWordId: '' })
+          if (callbacks.onEnded) callbacks.onEnded()
         },
         onError: () => {
           if (requestId !== this.speechRequestId) return
           this.setData({ speechStatus: 'error', speechText: '', speechSource: '', speechWordId: '' })
+          if (callbacks.onError) callbacks.onError()
           wx.showToast({ title: '播放失败，请重试', icon: 'none' })
         },
       })
@@ -527,6 +678,7 @@ Page({
     } catch (error) {
       if (requestId !== this.speechRequestId) return
       this.setData({ speechStatus: 'error', speechText: '', speechSource: '', speechWordId: '' })
+      if (callbacks.onError) callbacks.onError()
       wx.showToast({ title: error.message || '发音失败，请重试', icon: 'none' })
     }
   },
@@ -542,24 +694,53 @@ Page({
     this.showFlashcard(this.data.flashcardIndex + offset)
   },
 
+  startFlashcardSwipe(event) {
+    const touch = event.touches.length === 1 ? event.touches[0] : null
+    this.flashcardTouchStart = touch ? { x: touch.clientX, y: touch.clientY } : null
+  },
+
+  endFlashcardSwipe(event) {
+    const start = this.flashcardTouchStart
+    this.flashcardTouchStart = null
+    if (!start || event.changedTouches.length !== 1 || !this.data.flashcards) return
+    const touch = event.changedTouches[0]
+    const deltaX = touch.clientX - start.x
+    const deltaY = touch.clientY - start.y
+    if (Math.abs(deltaX) < 50 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.2) return
+    const nextIndex = this.data.flashcardIndex + (deltaX < 0 ? 1 : -1)
+    if (nextIndex < 0 || nextIndex >= this.data.flashcards.cards.length) return
+    this.showFlashcard(nextIndex)
+  },
+
+  cancelFlashcardSwipe() {
+    this.flashcardTouchStart = null
+  },
+
   selectFlashcard(event) {
     this.showFlashcard(Number(event.currentTarget.dataset.index))
   },
 
   closeFlashcards() {
+    this.stopFlashcardAutoplay()
     this.stopFlashcardSpeech()
+    this.cancelSpeechPrefetch()
     this.setData({ flashcards: null, flashcardWordIds: [], flashcardIndex: 0, currentFlashcard: null })
   },
 
   startFlashcardReview() {
     if (!this.data.flashcardWordIds.length) return
+    this.stopFlashcardAutoplay()
     this.stopFlashcardSpeech()
+    this.cancelSpeechPrefetch()
     this.setData({
       aiSelectedIds: this.data.flashcardWordIds,
       flashcards: null,
       flashcardIndex: 0,
       currentFlashcard: null,
-    }, () => this.createReview())
+    }, () => {
+      this.refreshEntries()
+      this.createReview()
+    })
   },
 
   answerReview(event) {
