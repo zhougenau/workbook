@@ -1,5 +1,6 @@
 import { parseWordChatResponse, type AiProvider, type WordChatMessage } from '@wordbook/core'
 import { getAccessToken, supabase } from './supabase'
+import { notifyPaidUsageChanged } from './paidUsage'
 
 async function getFunctionErrorMessage(error: { message: string; context?: unknown }) {
   if (error.context instanceof Response) {
@@ -26,6 +27,7 @@ export async function sendWordChatMessage(
     headers: { Authorization: `Bearer ${accessToken}` },
     signal,
   })
+  if (!signal?.aborted) notifyPaidUsageChanged()
   if (error) throw new Error(await getFunctionErrorMessage(error))
   return parseWordChatResponse(data)
 }

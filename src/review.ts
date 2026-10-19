@@ -1,5 +1,6 @@
 import type { AiProvider } from '@wordbook/core'
 import { getAccessToken, supabase } from './supabase'
+import { notifyPaidUsageChanged } from './paidUsage'
 import type { ReviewDifficulty, ReviewQuestion, ReviewQuestionType, ReviewQuiz } from '@wordbook/core'
 
 export { calculateMasteryChanges } from '@wordbook/core'
@@ -74,6 +75,7 @@ export async function generateReview(
     headers: { Authorization: `Bearer ${accessToken}` },
     signal,
   })
+  if (!signal?.aborted) notifyPaidUsageChanged()
   if (error) throw new Error(await getFunctionErrorMessage(error))
   return parseReviewQuiz(data, questionCount)
 }

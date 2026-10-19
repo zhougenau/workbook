@@ -1,5 +1,6 @@
 import { parseGeneratedFlashcards, type AiProvider } from '@wordbook/core'
 import { getAccessToken, supabase } from './supabase'
+import { notifyPaidUsageChanged } from './paidUsage'
 
 async function getFunctionErrorMessage(error: { message: string; context?: unknown }) {
   if (error.context instanceof Response) {
@@ -21,6 +22,7 @@ export async function generateFlashcards(wordIds: string[], signal?: AbortSignal
     headers: { Authorization: `Bearer ${accessToken}` },
     signal,
   })
+  if (!signal?.aborted) notifyPaidUsageChanged()
   if (error) throw new Error(await getFunctionErrorMessage(error))
   return parseGeneratedFlashcards(data)
 }

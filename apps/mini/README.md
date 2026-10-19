@@ -111,6 +111,8 @@ WECHAT_APP_SECRET=<微信小程序 AppSecret>
 
 AI 调用前会先同步词库。Edge Function 同时支持 Web JWT 和小程序 Mini session，但只会读取当前逻辑 owner 的有效词条；DeepSeek API Key 不会下发到小程序。
 
+AI 学习工坊展开后显示登录 owner 的当日文本 token 与语音字符实际用量、累计预留，以及文本/语音分别最近 1 分钟的请求数和当前并发限制；支持刷新，AI 请求结束后自动更新。日期按 UTC 计算。卡片语音由最多 2 个后台 worker 并行预生成，短暂的限流/并发不足会等待重试，日额度耗尽则停止重试。提高语音限额时，先在 Supabase Web SQL Editor 手动执行 `supabase/migrations/20261019000100_separate_speech_budget.sql`，再重新部署 `generate-speech` 和 `paid-usage` Edge Functions 并发布新版小程序；不要用数据库 CLI 执行迁移。
+
 ### 6. 配置腾讯云发音
 
 卡片发音使用腾讯云基础语音合成 `TextToVoice`。小程序只接收 Base64 MP3；TC3 签名和云密钥只存在 `generate-speech` Edge Function。

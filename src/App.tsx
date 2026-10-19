@@ -60,6 +60,7 @@ import { PassagePanel } from './PassagePanel'
 import { FlashcardPanel } from './FlashcardPanel'
 import { WordChatDialog } from './WordChatDialog'
 import { completeWord } from './wordCompletion'
+import { getPaidUsage, notifyPaidUsageChanged, type PaidUsage } from './paidUsage'
 import { createAccountLinkCode, type AccountLinkCode } from './accountLink'
 import './App.css'
 
@@ -138,6 +139,8 @@ function pronounce(text: string) {
 function App() {
   const [entries, setEntries] = useState<VocabularyEntry[]>([])
   const [user, setUser] = useState<User | null>(null)
+  const [paidUsage, setPaidUsage] = useState<PaidUsage | null>(null)
+  const [paidUsageStatus, setPaidUsageStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [email, setEmail] = useState('')
   const [cloudOpen, setCloudOpen] = useState(false)
   const [syncState, setSyncState] = useState<'local' | 'syncing' | 'synced' | 'error'>('local')
@@ -376,6 +379,34 @@ function App() {
   const syncFromEffect = useEffectEvent(performSync)
 
   useEffect(() => {
+    if (!user?.id) return
+    let active = true
+    let requestId = 0
+    const refresh = async () => {
+      const currentRequestId = ++requestId
+      setPaidUsageStatus('loading')
+      try {
+        const usage = await getPaidUsage()
+        if (active && currentRequestId === requestId) {
+          setPaidUsage(usage)
+          setPaidUsageStatus('ready')
+        }
+      } catch {
+        if (active && currentRequestId === requestId) setPaidUsageStatus('error')
+      }
+    }
+    const refreshOnFocus = () => { if (document.visibilityState === 'visible') void refresh() }
+    void refresh()
+    document.addEventListener('visibilitychange', refreshOnFocus)
+    window.addEventListener('wordbook:paid-usage-changed', refresh)
+    return () => {
+      active = false
+      document.removeEventListener('visibilitychange', refreshOnFocus)
+      window.removeEventListener('wordbook:paid-usage-changed', refresh)
+    }
+  }, [user?.id])
+
+  useEffect(() => {
     let active = true
 
     const start = async () => {
@@ -390,6 +421,8 @@ function App() {
     void start()
     const authSubscription = supabase?.auth.onAuthStateChange((_event, session) => {
       if (!active) return
+      setPaidUsage(null)
+      setPaidUsageStatus('idle')
       setUser(session?.user ?? null)
       void loadEntries(session?.user.id ?? null).then(setEntries)
       if (session?.user) void syncFromEffect(session.user)
@@ -1006,6 +1039,20 @@ function App() {
               </select>
               <ChevronDown size={16} />
             </label>
+          </div>
+
+          <div className="paid-usage" role="status" aria-live="polite">
+            <strong>AI 用量</strong>
+            {!user ? <span>登录后查看</span> : paidUsage && paidUsageStatus !== 'error' ? (
+              <>
+                <span>文本实际 {paidUsage.text.used.toLocaleString()} · 累计预留 {paidUsage.text.reserved.toLocaleString()} / {paidUsage.text.limit.toLocaleString()} tokens</span>
+                <span>语音实际 {paidUsage.speech.used.toLocaleString()} · 累计预留 {paidUsage.speech.reserved.toLocaleString()} / {paidUsage.speech.limit.toLocaleString()} 字</span>
+                <span>近 1 分钟 文本 {paidUsage.requests.used}/{paidUsage.requests.limit} · 语音 {paidUsage.speechRequests.used}/{paidUsage.speechRequests.limit} 次</span>
+                <span>并发 {paidUsage.concurrent.used}/{paidUsage.concurrent.limit}</span>
+                <small>{paidUsage.day} UTC</small>
+              </>
+            ) : <span>{paidUsageStatus === 'error' ? '读取失败，请重试' : '正在读取…'}</span>}
+            {user && <button type="button" onClick={notifyPaidUsageChanged} disabled={paidUsageStatus === 'loading'} title="刷新 AI 用量" aria-label="刷新 AI 用量"><RefreshCw size={15} /></button>}
           </div>
 
           {selectingWords && (

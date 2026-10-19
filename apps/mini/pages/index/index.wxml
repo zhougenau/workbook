@@ -126,6 +126,20 @@
     <button wx:if="{{!aiWorkshopExpanded}}" class="collapsed-flashcards" bindtap="createRandomFlashcards" disabled="{{!entries.length || aiStatus === 'checking'}}">随机卡片</button>
 
     <view wx:if="{{aiWorkshopExpanded}}" class="ai-workshop-content">
+    <view class="paid-usage" aria-label="AI 用量">
+      <view class="paid-usage-heading">
+        <text>AI 用量</text>
+        <button wx:if="{{loginStatus === 'ok'}}" bindtap="refreshPaidUsage" disabled="{{paidUsageStatus === 'loading'}}" aria-label="刷新 AI 用量">↻</button>
+      </view>
+      <view wx:if="{{paidUsage && paidUsageStatus !== 'error'}}" class="paid-usage-values">
+        <text>文本实际 {{paidUsage.text.used}} · 累计预留 {{paidUsage.text.reserved}} / {{paidUsage.text.limit}} tokens</text>
+        <text>语音实际 {{paidUsage.speech.used}} · 累计预留 {{paidUsage.speech.reserved}} / {{paidUsage.speech.limit}} 字</text>
+        <text>近 1 分钟 文本 {{paidUsage.requests.used}}/{{paidUsage.requests.limit}} · 语音 {{paidUsage.speechRequests.used}}/{{paidUsage.speechRequests.limit}} 次</text>
+        <text>并发 {{paidUsage.concurrent.used}}/{{paidUsage.concurrent.limit}}</text>
+        <text class="paid-usage-day">{{paidUsage.day}} UTC</text>
+      </view>
+      <text wx:else class="paid-usage-message">{{paidUsageStatus === 'error' ? '读取失败，请刷新重试' : loginStatus === 'ok' ? '正在读取…' : '连接微信身份后查看'}}</text>
+    </view>
     <view class="ai-toolbar">
       <view class="ai-word-picker">
         <text class="ai-picker-label">{{entries.length ? '本次学习词汇' : '请先在下方收录单词'}}</text>

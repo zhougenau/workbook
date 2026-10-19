@@ -143,7 +143,9 @@ Deno.serve(async (request) => {
       })
     }, (response) => response.status === 200 ? speechRequest.text.length : 0)
   } catch (error) {
-    if (error instanceof BudgetExceededError) return jsonResponse({ error: error.message }, 429)
+    if (error instanceof BudgetExceededError) {
+      return jsonResponse({ error: error.message, reason: error.reason, retryAfterSeconds: error.retryAfterSeconds }, 429)
+    }
     console.error('Tencent TTS request failed', error)
     return jsonResponse({ error: '连接语音服务失败，请稍后重试' }, 502)
   }

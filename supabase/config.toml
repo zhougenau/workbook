@@ -18,6 +18,9 @@ verify_jwt = false
 [functions.generate-speech]
 verify_jwt = false
 
+[functions.paid-usage]
+verify_jwt = false
+
 [functions.mini-health]
 verify_jwt = false
 

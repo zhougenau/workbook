@@ -430,6 +430,14 @@
 
 .collapsed-flashcards[disabled] { opacity: .45; }
 
+.paid-usage { padding: 14rpx 0; border-bottom: 1rpx solid #aaa69b; font-size: 21rpx; }
+.paid-usage-heading { display: flex; align-items: center; justify-content: space-between; font-weight: 700; }
+.paid-usage-heading button { width: 48rpx; height: 48rpx; margin: 0; padding: 0; border: 1rpx solid #20231f; border-radius: 0; background: transparent; font-size: 32rpx; line-height: 44rpx; }
+.paid-usage-heading button::after { border: 0; }
+.paid-usage-values { display: flex; flex-direction: column; gap: 6rpx; margin-top: 8rpx; }
+.paid-usage-values text { overflow-wrap: anywhere; }
+.paid-usage-day, .paid-usage-message { color: #6b6b62; }
+
 .ai-toolbar {
   padding: 18rpx 0 24rpx;
   border-block: 1rpx solid #aaa69b;

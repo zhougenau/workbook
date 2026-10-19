@@ -1,5 +1,6 @@
 import type { AiProvider } from '@wordbook/core'
 import { getAccessToken, supabase } from './supabase'
+import { notifyPaidUsageChanged } from './paidUsage'
 
 export async function completeWord(term: string, signal: AbortSignal, provider: AiProvider): Promise<{ meaning: string; example: string }> {
   if (!supabase) throw new Error('尚未配置 Supabase')
@@ -10,6 +11,7 @@ export async function completeWord(term: string, signal: AbortSignal, provider: 
     headers: { Authorization: `Bearer ${accessToken}` },
     signal,
   })
+  if (!signal.aborted) notifyPaidUsageChanged()
   if (error) {
     if (error.context instanceof Response) {
       let body: unknown

@@ -4,7 +4,10 @@ type Owner = NonNullable<Awaited<ReturnType<typeof resolveOwner>>>
 type Resource = 'text' | 'speech'
 
 export class BudgetExceededError extends Error {
-  constructor() {
+  constructor(
+    readonly reason: 'rate' | 'concurrent' | 'daily' | 'unknown' = 'unknown',
+    readonly retryAfterSeconds = 0,
+  ) {
     super('AI 使用过于频繁或今日额度已用完，请稍后重试')
   }
 }
@@ -24,7 +27,11 @@ export async function withPaidBudget<T>(
   })
   if (error) throw new Error('AI 额度服务暂不可用')
   if (!data || typeof data !== 'object') throw new Error('AI 额度服务返回异常')
-  if (!data.allowed) throw new BudgetExceededError()
+  if (!data.allowed) {
+    const reason = data.reason === 'rate' || data.reason === 'concurrent' || data.reason === 'daily'
+      ? data.reason : 'unknown'
+    throw new BudgetExceededError(reason, Number.isInteger(data.retry_after_seconds) ? data.retry_after_seconds : 0)
+  }
   if (typeof data.lease_id !== 'string') throw new Error('AI 额度服务返回异常')
 
   let used = 0

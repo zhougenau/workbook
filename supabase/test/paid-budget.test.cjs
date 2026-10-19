@@ -36,6 +36,20 @@ test('denial and database errors never reach the paid provider', async () => {
   assert.equal(providerCalls, 0)
 })
 
+test('budget denial preserves temporary and daily reasons', async () => {
+  const owner = { ownerId: 'owner', admin: { rpc: async () => ({ data: { allowed: false, reason: 'rate', retry_after_seconds: 60 } }) } }
+  await assert.rejects(withPaidBudget(owner, 'speech', 200, async () => {}), (error) => {
+    assert.equal(error.reason, 'rate')
+    assert.equal(error.retryAfterSeconds, 60)
+    return true
+  })
+  owner.admin.rpc = async () => ({ data: { allowed: false, reason: 'daily' } })
+  await assert.rejects(withPaidBudget(owner, 'speech', 200, async () => {}), (error) => {
+    assert.equal(error.reason, 'daily')
+    return true
+  })
+})
+
 test('provider failure still releases its lease', async () => {
   const calls = []
   const owner = { ownerId: 'owner', admin: { rpc: async (name) => {
@@ -66,4 +80,149 @@ test('word completion responds with 429 on exhausted budget', async () => {
   const response = await handler(request)
   assert.equal(response.status, 429)
   assert.match((await response.json()).error, /额度/)
+})
+
+test('usage endpoint requires login and reads only the authenticated owner', async () => {
+  const source = fs.readFileSync(path.join(__dirname, '../functions/paid-usage/index.ts'), 'utf8')
+  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
+  const filters = []
+  let authenticated = true
+  let handler
+  const owner = { ownerId: 'current-owner', admin: { from: (table) => {
+    let resource = 'text'
+    const result = () => table === 'paid_budget_days'
+      ? { data: { actual_text_tokens: 42, reserved_text_tokens: 400, actual_speech_chars: 0, reserved_speech_chars: 0 }, error: null }
+      : { count: table === 'paid_budget_requests' ? resource === 'text' ? 3 : 2 : 1, error: null }
+    return {
+      select() { return this },
+      eq(field, value) { filters.push([table, field, value]); if (field === 'resource') resource = value; return this },
+      gt() { return this },
+      maybeSingle: async () => result(),
+      then: (resolve, reject) => Promise.resolve(result()).then(resolve, reject),
+    }
+  } } }
+  vm.runInNewContext(code, {
+    exports: {},
+    require: () => ({ resolveOwner: async () => authenticated ? owner : null }),
+    Deno: { serve: (callback) => { handler = callback }, env: { get: () => 'configured' } },
+    Response, Date, Number, Promise, console,
+  })
+  const url = 'https://example.test/paid-usage'
+  assert.equal((await handler(new Request(url))).status, 401)
+  assert.equal(filters.length, 0)
+  const response = await handler(new Request(url, { headers: { Authorization: 'Bearer test' } }))
+  assert.equal(response.status, 200)
+  const usage = await response.json()
+  assert.deepEqual(usage.text, { used: 42, reserved: 400, limit: 100000 })
+  assert.deepEqual(usage.requests, { used: 3, limit: 10 })
+  assert.deepEqual(usage.speechRequests, { used: 2, limit: 60 })
+  assert.deepEqual(usage.speech, { used: 0, reserved: 0, limit: 30000 })
+  assert.deepEqual(usage.concurrent, { used: 1, limit: 2 })
+  assert.equal(filters.filter(([, field, value]) => field === 'owner_id' && value === 'current-owner').length, 4)
+  assert.deepEqual(filters.filter(([, field]) => field === 'resource').map(([, , value]) => value), ['text', 'speech'])
+  assert.equal(JSON.stringify(usage).includes('current-owner'), false)
+  authenticated = false
+  assert.equal((await handler(new Request(url, { headers: { Authorization: 'Bearer expired' } }))).status, 401)
+})
+
+test('usage endpoint reports empty days and fails closed on query errors', async () => {
+  const source = fs.readFileSync(path.join(__dirname, '../functions/paid-usage/index.ts'), 'utf8')
+  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
+  let handler
+  let failed = false
+  const owner = { ownerId: 'owner', admin: { from: () => {
+    const result = () => ({ data: null, count: 0, error: failed ? new Error('private database detail') : null })
+    return {
+      select() { return this }, eq() { return this }, gt() { return this },
+      maybeSingle: async () => result(),
+      then: (resolve, reject) => Promise.resolve(result()).then(resolve, reject),
+    }
+  } } }
+  vm.runInNewContext(code, {
+    exports: {}, require: () => ({ resolveOwner: async () => owner }),
+    Deno: { serve: (callback) => { handler = callback }, env: { get: () => 'configured' } },
+    Response, Date, Number, Promise, console,
+  })
+  const request = () => new Request('https://example.test/paid-usage', { headers: { Authorization: 'Bearer test' } })
+  const empty = await handler(request())
+  assert.equal(empty.status, 200)
+  assert.deepEqual((await empty.json()).speech, { used: 0, reserved: 0, limit: 30000 })
+  failed = true
+  const error = await handler(request())
+  assert.equal(error.status, 500)
+  assert.equal(JSON.stringify(await error.json()).includes('private database detail'), false)
+})
+
+test('Mini usage read sends its session and removes it after a 401', async () => {
+  let session = { token: 'mini-secret', expiresAt: new Date(Date.now() + 60_000).toISOString() }
+  let statusCode = 200
+  let sentAuthorization
+  const wx = {
+    getStorageSync: () => session,
+    removeStorageSync: () => { session = null },
+    request: ({ header, success }) => {
+      sentAuthorization = header.Authorization
+      success({ statusCode, data: statusCode === 200
+        ? { day: '2026-01-01', text: {}, speech: {}, requests: {}, speechRequests: {}, concurrent: {} }
+        : { error: '登录已失效' } })
+    },
+  }
+  const mini = { exports: {} }
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../apps/mini/utils/api.js'), 'utf8'), {
+    module: mini, require: () => ({}), wx, Promise, Date, Error,
+  })
+  const { getPaidUsage } = mini.exports
+  assert.equal((await getPaidUsage()).day, '2026-01-01')
+  assert.equal(sentAuthorization, 'Bearer mini-secret')
+  statusCode = 401
+  await assert.rejects(getPaidUsage(), /登录已失效/)
+  assert.equal(session, null)
+  await assert.rejects(getPaidUsage(), /请先连接微信身份/)
+})
+
+test('Mini card speech prefetch retries 429 and stops after cancellation', async () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../apps/mini/pages/index/index.js'), 'utf8')
+  let page
+  const timers = []
+  vm.runInNewContext(source, {
+    Page: (options) => { page = options },
+    require: (name) => name.includes('wordbook-core')
+      ? { DEFAULT_PAGE_SIZE: 10, PAGE_SIZE_OPTIONS: [10], AI_PROVIDERS: [], DEFAULT_AI_PROVIDER: 'deepseek', MASTERY_FILTER_OPTIONS: [], VOCABULARY_SORT_OPTIONS: [], WORD_CHAT_SUGGESTIONS: [], MAX_WORD_CHAT_MESSAGE_LENGTH: 500 }
+      : {},
+    setTimeout: (callback, delay) => { timers.push({ callback, delay }); return timers.length },
+  })
+  page.speechPrefetchGeneration = 0
+  let calls = 0
+  page.getSpeechAudio = async () => {
+    calls++
+    if (calls === 1) throw Object.assign(new Error('rate limited'), { statusCode: 429, reason: 'rate' })
+    return 'audio'
+  }
+  page.prefetchFlashcardSpeech([{ word: 'one', usage: 'example' }])
+  await new Promise(setImmediate)
+  assert.equal(calls, 1)
+  assert.equal(timers.length, 1)
+  assert.equal(timers[0].delay, 60_000)
+  timers.shift().callback()
+  await new Promise(setImmediate)
+  assert.equal(calls, 2)
+
+  calls = 0
+  page.prefetchFlashcardSpeech([{ word: 'two', usage: 'example' }])
+  await new Promise(setImmediate)
+  page.cancelSpeechPrefetch()
+  timers.shift().callback()
+  await new Promise(setImmediate)
+  assert.equal(calls, 1)
+
+  page.getSpeechAudio = async () => { throw Object.assign(new Error('busy'), { statusCode: 429, reason: 'concurrent' }) }
+  page.prefetchFlashcardSpeech([{ word: 'three', usage: 'example' }])
+  await new Promise(setImmediate)
+  assert.equal(timers.shift().delay, 2_000)
+  page.cancelSpeechPrefetch()
+
+  page.getSpeechAudio = async () => { throw Object.assign(new Error('spent'), { statusCode: 429, reason: 'daily' }) }
+  page.prefetchFlashcardSpeech([{ word: 'four', usage: 'example' }])
+  await new Promise(setImmediate)
+  assert.equal(timers.length, 0)
 })

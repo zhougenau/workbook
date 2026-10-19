@@ -1,6 +1,11 @@
 const SUPABASE_FUNCTIONS_URL = 'https://gvgztuwklhlhzorcoouh.supabase.co/functions/v1'
 const SESSION_KEY = 'wordbook-mini:session:v1'
 const { parseGeneratedFlashcards, parseWordChatResponse } = require('../vendor/wordbook-core')
+let paidUsageListener = null
+
+function setPaidUsageListener(listener) {
+  paidUsageListener = listener
+}
 
 function request(path, options = {}) {
   return new Promise((resolve, reject) => {
@@ -23,6 +28,8 @@ function request(path, options = {}) {
           : `请求失败 (${response.statusCode})`
         const error = new Error(message)
         error.statusCode = response.statusCode
+        error.reason = response.data && response.data.reason
+        error.retryAfterSeconds = response.data && response.data.retryAfterSeconds
         reject(error)
       },
       fail(error) {
@@ -135,6 +142,25 @@ async function requestAi(path, data) {
   } catch (error) {
     if (error.statusCode === 401) wx.removeStorageSync(SESSION_KEY)
     throw error
+  } finally {
+    if (paidUsageListener) paidUsageListener()
+  }
+}
+
+async function getPaidUsage() {
+  const session = loadSession()
+  if (!session) throw new Error('请先连接微信身份')
+  try {
+    const result = await request('/paid-usage', {
+      header: { Authorization: `Bearer ${session.token}` },
+    })
+    if (!result || !result.text || !result.speech || !result.requests || !result.speechRequests || !result.concurrent) {
+      throw new Error('AI 用量数据不完整')
+    }
+    return result
+  } catch (error) {
+    if (error.statusCode === 401) wx.removeStorageSync(SESSION_KEY)
+    throw error
   }
 }
 
@@ -174,6 +200,7 @@ async function generateSpeech(text) {
 module.exports = {
   checkHealth,
   completeWord,
+  getPaidUsage,
   generateFlashcards,
   generatePassage,
   generateReview,
@@ -181,6 +208,7 @@ module.exports = {
   linkWechatAccount,
   loadSession,
   loginWithWechat,
+  setPaidUsageListener,
   sendWordChatMessage,
   synchronizeEntries,
 }

@@ -1,5 +1,6 @@
 import type { AiProvider } from '@wordbook/core'
 import { getAccessToken, supabase } from './supabase'
+import { notifyPaidUsageChanged } from './paidUsage'
 
 export type PassageLength = 'short' | 'medium' | 'long'
 
@@ -52,6 +53,7 @@ export async function generatePassage(wordIds: string[], length: PassageLength, 
     headers: { Authorization: `Bearer ${accessToken}` },
     signal,
   })
+  if (!signal?.aborted) notifyPaidUsageChanged()
   if (error) throw new Error(await getFunctionErrorMessage(error))
   return parsePassage(data)
 }

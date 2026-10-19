@@ -1,6 +1,7 @@
 const {
   checkHealth,
   completeWord,
+  getPaidUsage,
   generateFlashcards,
   generatePassage,
   generateReview,
@@ -8,6 +9,7 @@ const {
   linkWechatAccount,
   loadSession,
   loginWithWechat,
+  setPaidUsageListener,
   sendWordChatMessage,
   synchronizeEntries,
 } = require('../../utils/api')
@@ -66,8 +68,8 @@ function decorateQuiz(quiz) {
 Page({
   data: {
     entries: [],
-    appVersion: '1.8.0',
-    appUpdatedAt: '2026-10-16',
+    appVersion: '1.9.0',
+    appUpdatedAt: '2026-10-19',
     visibleEntries: [],
     search: '',
     masteryFilter: 'all',
@@ -102,6 +104,8 @@ Page({
     connectionExpanded: false,
     loginStatus: 'idle',
     loginMessage: '尚未连接微信身份',
+    paidUsage: null,
+    paidUsageStatus: 'idle',
     syncStatus: 'idle',
     syncMessage: '登录后可同步词库',
     linkCode: '',
@@ -177,10 +181,15 @@ Page({
       userId: session && session.userId ? session.userId : '',
     })
     this.refreshEntries()
-    if (session) this.synchronize(false)
+    setPaidUsageListener(() => this.refreshPaidUsage())
+    if (session) {
+      this.synchronize(false)
+      this.refreshPaidUsage()
+    }
   },
 
   onUnload() {
+    setPaidUsageListener(null)
     this.chatRequestId += 1
     this.cancelWordCompletion()
     if (this.syncTimer) clearTimeout(this.syncTimer)
@@ -205,6 +214,26 @@ Page({
       this.stopFlashcardSpeech()
     }
     this.setData({ aiWorkshopExpanded: !this.data.aiWorkshopExpanded })
+  },
+
+  async refreshPaidUsage() {
+    if (!loadSession()) {
+      this.setData({ paidUsage: null, paidUsageStatus: 'idle' })
+      return
+    }
+    this.setData({ paidUsageStatus: 'loading' })
+    try {
+      const paidUsage = await getPaidUsage()
+      this.setData({ paidUsage, paidUsageStatus: 'ready' })
+    } catch (error) {
+      const session = loadSession()
+      this.setData({
+        paidUsage: session ? this.data.paidUsage : null,
+        paidUsageStatus: 'error',
+        loginStatus: session ? this.data.loginStatus : 'error',
+        loginMessage: session ? this.data.loginMessage : '微信会话已失效，请重新连接',
+      })
+    }
   },
 
   refreshEntries() {
@@ -680,7 +709,18 @@ Page({
     const prefetch = async () => {
       while (generation === this.speechPrefetchGeneration && nextIndex < cards.length) {
         const card = cards[nextIndex++]
-        await this.getSpeechAudio(`${card.word}. ${card.usage}`).catch(() => null)
+        let legacyRetries = 0
+        while (generation === this.speechPrefetchGeneration) {
+          try {
+            await this.getSpeechAudio(`${card.word}. ${card.usage}`)
+            break
+          } catch (error) {
+            if (error.statusCode !== 429 || error.reason === 'daily') break
+            if (error.reason !== 'rate' && error.reason !== 'concurrent' && legacyRetries++ > 0) break
+            const delay = error.reason === 'concurrent' ? 2_000 : 60_000
+            await new Promise((resolve) => setTimeout(resolve, delay))
+          }
+        }
       }
     }
     for (let worker = 0; worker < Math.min(2, cards.length); worker += 1) prefetch()
@@ -1054,6 +1094,7 @@ Page({
         loginMessage: '微信身份连接成功',
         userId: session.userId || '',
       }, () => this.scheduleWordCompletion())
+      this.refreshPaidUsage()
       await this.synchronize(false)
     } catch (error) {
       this.setData({
@@ -1077,6 +1118,7 @@ Page({
         linkStatus: 'ok',
         linkMessage: `绑定完成 · 迁移 ${result.movedCount} 条，合并 ${result.mergedCount} 条`,
       })
+      this.refreshPaidUsage()
       await this.synchronize(false)
     } catch (error) {
       this.setData({
