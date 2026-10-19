@@ -1,4 +1,5 @@
 import { callAiProvider, hasAiProviderKey, parseAiProvider } from '../_shared/ai-provider.ts'
+import { BudgetExceededError } from '../_shared/paid-budget.ts'
 import { resolveOwner } from '../_shared/resolve-owner.ts'
 import { MAX_WORD_CHAT_MESSAGES, MAX_WORD_CHAT_MESSAGE_LENGTH } from '../../../packages/core/src/word-chat.ts'
 import type { AiProvider } from '../_shared/ai-provider.ts'
@@ -116,12 +117,13 @@ Deno.serve(async (request) => {
   if (!data) return jsonResponse({ error: '单词尚未同步或无权访问，请先同步后重试' }, 409)
 
   try {
-    const result = await callAiProvider(chatRequest.provider, [
+    const result = await callAiProvider(owner, chatRequest.provider, [
       { role: 'system', content: systemPrompt(data as VocabularyRow) },
       ...chatRequest.messages,
     ], { timeout: 45_000, maxTokens: 2500, temperature: 0.5 })
     return jsonResponse({ reply: result.content.trim().slice(0, MAX_WORD_CHAT_MESSAGE_LENGTH), tokenUsage: result.tokenUsage })
   } catch (cause) {
+    if (cause instanceof BudgetExceededError) return jsonResponse({ error: cause.message }, 429)
     console.error(cause)
     return jsonResponse({ error: 'AI 暂时无法回复，请稍后重试' }, 502)
   }

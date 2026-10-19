@@ -96,6 +96,7 @@
         <text>单词或短语</text>
         <input value="{{term}}" data-field="term" bindinput="handleFieldInput" placeholder="serendipity" maxlength="200" />
       </label>
+      <text wx:if="{{completionStatus !== 'idle'}}" class="completion-status {{completionStatus === 'error' ? 'completion-status--error' : ''}}">{{completionStatus === 'loading' ? 'AI 正在补全…' : completionStatus === 'done' ? 'AI 已补全' : 'AI 补全暂不可用，可手动填写'}}</text>
       <label class="field">
         <text>中文释义</text>
         <input value="{{meaning}}" data-field="meaning" bindinput="handleFieldInput" placeholder="意外发现美好事物" maxlength="500" />
@@ -104,7 +105,7 @@
         <text>例句或笔记</text>
         <input value="{{note}}" data-field="note" bindinput="handleFieldInput" placeholder="在哪里遇见它？" maxlength="1000" />
       </label>
-      <button class="primary-button" bindtap="addEntry">＋ 收录单词</button>
+      <button class="primary-button" bindtap="addEntry" disabled="{{completionStatus === 'loading'}}">＋ 收录单词</button>
     </view>
     <view wx:if="{{message}}" class="message">{{message}}</view>
     </view>

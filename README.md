@@ -76,6 +76,8 @@ npm run preview
 
 在“记下新单词”的“智能选取”框中粘贴包含单词、词性、音标、中文释义和例句的文字，然后点击“智能分析”。应用会自动填写单词、释义和例句字段；释义只截取中文内容，不保留英文词性、音标或英文解释。英文例句既可以使用 `e.g.`、`example` 或“例句”标记，也可以单独成行；无标记例句后一行的中文翻译不会写入例句。分析完成后可以修改各字段，确认无误再点击“收录单词”写入数据库。
 
+登录后，在“单词或短语”输入英文词，短暂停顿后 AI 会补齐仍为空的中文释义和英文例句；可以手动修改后再收录。智能选取、已有释义及用户手写笔记不会被补全覆盖。未登录或 AI 暂不可用时仍可手动填写收录；此功能需部署 `complete-word` Edge Function。
+
 示例输入：
 
 ```text
@@ -133,7 +135,18 @@ VITE_SUPABASE_ANON_KEY=your-anon-publishable-key
 
 Web 词库工具栏和小程序 AI 学习工坊都可选择 DeepSeek 或通义千问；两端共用 Core 的选项与默认值，但选择分别保存在各设备本地。旧客户端未传接入商时默认 DeepSeek；选定通义千问后，服务端只调用通义千问，不会静默切换。AI Key 仅保存在 Supabase Secrets 中。
 
-在阿里云百炼创建中国内地地域的 API Key 后，在项目根目录设置：
+付费接口（补全、对话、题目、短文、卡片和小程序语音）共用服务端预算。先由数据库管理员在 Supabase Dashboard 的 SQL Editor 手动执行 `supabase/migrations/20261016000100_add_paid_budget.sql`，确认两个预算 RPC 已创建，再部署所有六个 Edge Functions；迁移未就绪时新函数会拒绝付费调用。本项目的代理与防火墙阻断 CLI 数据库连接，不使用 `db push`。SQL Editor 不会登记 CLI 迁移历史，后续数据库变更也应在 Web 端执行完整 SQL，不要让 CLI 重复运行已手动应用的迁移。每个 owner 合计最多每分钟 10 次、同时 2 次；每天最多预留 100,000 个文本 token 或 10,000 个语音字符（UTC 日界）。文本输入按 UTF-8 字节数加最大输出量保守预留，失败请求也不退还预留量，以防无法确认服务商是否已计费；实际用量仅供审计，不用于退还额度。超限返回 429，数据库不可用时拒绝付费调用。用量以逻辑 owner 计，绑定 Web 与微信身份后共享额度。正式上线仍应在模型和语音服务商控制台设置账户级支出上限；多账号可绕过单个 owner 的预算。
+
+部署前运行 `node --test supabase/test/paid-budget.test.cjs` 检查守卫。确认 SQL Editor 已成功执行预算迁移后，在项目根目录部署函数：
+
+```powershell
+npx supabase functions deploy complete-word
+npx supabase functions deploy word-chat
+npx supabase functions deploy generate-review
+npx supabase functions deploy generate-passage
+npx supabase functions deploy generate-flashcards
+npx supabase functions deploy generate-speech
+```
 
 ```powershell
 $secureKey = Read-Host "DashScope API Key" -AsSecureString
@@ -144,6 +157,7 @@ npx supabase functions deploy generate-review
 npx supabase functions deploy generate-passage
 npx supabase functions deploy generate-flashcards
 npx supabase functions deploy word-chat
+npx supabase functions deploy complete-word
 ```
 
 服务端使用阿里云百炼中国内地的兼容接口与 `qwen-flash`；应在部署后分别验证题目、短文、卡片和对话的返回质量，并确认 Supabase 所在地域到接口的连通性。未配置所选接入商的密钥时函数返回 503，不会暴露密钥给客户端。
@@ -166,6 +180,7 @@ npx supabase functions deploy generate-review
 npx supabase functions deploy word-chat
 npx supabase functions deploy generate-passage
 npx supabase functions deploy generate-flashcards
+npx supabase functions deploy complete-word
 ```
 
 函数控制台：[`generate-review`](https://supabase.com/dashboard/project/gvgztuwklhlhzorcoouh/functions)。部署时出现 `WARNING: Docker is not running` 可以忽略；Docker 只用于本地运行 Edge Function，不影响远程部署。若提示 `Entrypoint path does not exist`，说明命令不在 wordbook 项目根目录执行，请先运行上面的 `cd` 命令。

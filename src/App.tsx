@@ -59,6 +59,7 @@ import type { MasteryChange } from './review'
 import { PassagePanel } from './PassagePanel'
 import { FlashcardPanel } from './FlashcardPanel'
 import { WordChatDialog } from './WordChatDialog'
+import { completeWord } from './wordCompletion'
 import { createAccountLinkCode, type AccountLinkCode } from './accountLink'
 import './App.css'
 
@@ -149,6 +150,7 @@ function App() {
   const [term, setTerm] = useState('')
   const [meaning, setMeaning] = useState('')
   const [note, setNote] = useState('')
+  const [completionStatus, setCompletionStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [analysisSource, setAnalysisSource] = useState('')
   const [search, setSearch] = useState('')
   const [masteryFilter, setMasteryFilter] = useState<MasteryFilter>('all')
@@ -171,6 +173,43 @@ function App() {
   const editingIdRef = useRef<string | null>(null)
   const syncPendingAfterEdit = useRef(false)
   const reviewWordList = useRef<HTMLDivElement | null>(null)
+  const completionRequest = useRef<AbortController | null>(null)
+  const completionSource = useRef<'manual' | 'analysis'>('manual')
+  const fieldEdits = useRef({ meaning: 0, note: 0 })
+  const completionFields = useRef({ meaning: '', note: '' })
+
+  useEffect(() => {
+    const cleanTerm = term.trim()
+    if (!user?.id || completionSource.current === 'analysis' || !cleanTerm || cleanTerm.length > 100 || !/[A-Za-z]/.test(cleanTerm) || (completionFields.current.meaning.trim() && completionFields.current.note.trim())) return
+    const controller = new AbortController()
+    completionRequest.current = controller
+    const timeout = window.setTimeout(() => {
+      const meaningEdit = fieldEdits.current.meaning
+      const noteEdit = fieldEdits.current.note
+      void completeWord(cleanTerm, controller.signal, aiProvider).then((completion) => {
+        if (controller.signal.aborted) return
+        let filled = false
+        if (fieldEdits.current.meaning === meaningEdit && !completionFields.current.meaning.trim()) {
+          completionFields.current.meaning = completion.meaning
+          setMeaning(completion.meaning)
+          filled = true
+        }
+        if (fieldEdits.current.note === noteEdit && !completionFields.current.note.trim()) {
+          completionFields.current.note = completion.example
+          setNote(completion.example)
+          filled = true
+        }
+        setCompletionStatus(filled ? 'done' : 'idle')
+      }).catch(() => {
+        if (!controller.signal.aborted) setCompletionStatus('error')
+      })
+    }, 700)
+    return () => {
+      window.clearTimeout(timeout)
+      controller.abort()
+      if (completionRequest.current === controller) completionRequest.current = null
+    }
+  }, [term, user?.id, aiProvider])
 
   const changeDictionaryEngine = (engine: DictionaryEngine) => {
     setDictionaryEngine(engine)
@@ -412,6 +451,7 @@ function App() {
     event.preventDefault()
     const cleanTerm = term.trim()
     if (!cleanTerm) return
+    if (completionStatus === 'loading') return
 
     const duplicate = entries.find(
       (entry) => normalizeTerm(entry.term) === normalizeTerm(cleanTerm),
@@ -421,6 +461,7 @@ function App() {
       return
     }
 
+    completionRequest.current?.abort()
     const now = new Date().toISOString()
     const entry: VocabularyEntry = {
       id: crypto.randomUUID(),
@@ -438,7 +479,10 @@ function App() {
     setTerm('')
     setMeaning('')
     setNote('')
+    completionFields.current = { meaning: '', note: '' }
     setAnalysisSource('')
+    setCompletionStatus('idle')
+    completionSource.current = 'manual'
     setMessage(`已收录 “${entry.term}”`)
   }
 
@@ -449,10 +493,27 @@ function App() {
       return
     }
 
+    completionRequest.current?.abort()
+    completionSource.current = 'analysis'
+    fieldEdits.current.meaning += 1
+    fieldEdits.current.note += 1
+    completionFields.current = { meaning: result.meaning, note: result.example }
     setTerm(result.term)
     setMeaning(result.meaning)
     setNote(result.example)
+    setCompletionStatus('idle')
     setMessage(result.meaning || result.example ? '智能分析完成，请确认后收录' : '已识别单词，请补充释义和例句')
+  }
+
+  const handleCompletionFieldChange = (field: 'meaning' | 'note', value: string) => {
+    fieldEdits.current[field] += 1
+    completionFields.current[field] = value
+    if (field === 'meaning') setMeaning(value)
+    else setNote(value)
+    if (completionFields.current.meaning.trim() && completionFields.current.note.trim()) {
+      completionRequest.current?.abort()
+      setCompletionStatus('idle')
+    }
   }
 
   const updateEntry = async (id: string, patch: Partial<VocabularyEntry>) => {
@@ -862,17 +923,22 @@ function App() {
             </div>
             <label className="field term-field">
               <span>单词或短语</span>
-              <input value={term} onChange={(event) => setTerm(event.target.value)} placeholder="serendipity" autoFocus />
+              <input value={term} onChange={(event) => {
+                completionSource.current = 'manual'
+                setTerm(event.target.value)
+                setCompletionStatus(user && event.target.value.trim() && /[A-Za-z]/.test(event.target.value) && event.target.value.trim().length <= 100 && !(completionFields.current.meaning.trim() && completionFields.current.note.trim()) ? 'loading' : 'idle')
+              }} placeholder="serendipity" autoFocus />
+              {completionStatus !== 'idle' && <small className={`completion-status ${completionStatus}`} role="status">{completionStatus === 'loading' ? 'AI 正在补全…' : completionStatus === 'done' ? 'AI 已补全' : 'AI 补全暂不可用，可手动填写'}</small>}
             </label>
             <label className="field">
               <span>释义</span>
-              <input value={meaning} onChange={(event) => setMeaning(event.target.value)} placeholder="意外发现美好事物的能力" />
+              <input value={meaning} onChange={(event) => handleCompletionFieldChange('meaning', event.target.value)} placeholder="意外发现美好事物的能力" />
             </label>
             <label className="field note-field">
               <span>笔记 <small>选填</small></span>
-              <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="在哪里遇见它？或者写下你的例句" />
+              <input value={note} onChange={(event) => handleCompletionFieldChange('note', event.target.value)} placeholder="在哪里遇见它？或者写下你的例句" />
             </label>
-            <button className="primary-button" type="submit"><Plus size={19} />收录单词</button>
+            <button className="primary-button" type="submit" disabled={completionStatus === 'loading'}><Plus size={19} />收录单词</button>
           </form>
           {message && <button className="toast" type="button" onClick={() => setMessage('')}><Check size={16} />{message}<X size={14} /></button>}
         </section>

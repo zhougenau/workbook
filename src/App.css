@@ -275,8 +275,11 @@
 .field input { height: 45px; font-size: 17px; }
 .field input:focus, .edit-fields input:focus { border-bottom-color: var(--coral); }
 .field input::placeholder { color: #6f6b65; }
+.field .completion-status { min-height: 14px; color: var(--lime); font-size: 11px; }
+.field .completion-status.error { color: #ffc6b8; }
 .primary-button { display: inline-flex; height: 50px; padding: 0 22px; align-items: center; justify-content: center; gap: 8px; color: var(--ink); font-weight: 700; background: var(--coral); border: 1px solid var(--coral); cursor: pointer; }
 .primary-button:hover { background: var(--lime); border-color: var(--lime); }
+.primary-button:disabled { opacity: .5; cursor: wait; }
 .toast { position: absolute; top: 28px; right: 28px; z-index: 2; display: flex; padding: 9px 12px; align-items: center; gap: 8px; color: var(--ink); font-size: 13px; background: var(--lime); border: 1px solid var(--ink); cursor: pointer; }
 .library { padding: 72px 0 110px; }
 .app-shell .library-heading h2 { font-size: 38px; }

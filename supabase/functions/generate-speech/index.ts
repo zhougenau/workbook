@@ -1,4 +1,5 @@
 import { resolveOwner } from '../_shared/resolve-owner.ts'
+import { BudgetExceededError, withPaidBudget } from '../_shared/paid-budget.ts'
 
 const endpoint = 'https://tts.tencentcloudapi.com'
 const host = 'tts.tencentcloudapi.com'
@@ -81,13 +82,14 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: '语音服务尚未完成配置' }, 503)
   }
 
+  let owner
   try {
-    const owner = await resolveOwner(authorization, supabaseUrl, supabaseAnonKey, serviceRoleKey)
-    if (!owner) return jsonResponse({ error: '登录已失效，请重新登录' }, 401)
+    owner = await resolveOwner(authorization, supabaseUrl, supabaseAnonKey, serviceRoleKey)
   } catch (error) {
     console.error('speech owner lookup failed', error)
     return jsonResponse({ error: '验证登录身份失败' }, 500)
   }
+  if (!owner) return jsonResponse({ error: '登录已失效，请重新登录' }, 401)
 
   let body: unknown
   try {
@@ -113,32 +115,35 @@ Deno.serve(async (request) => {
   const timestamp = Math.floor(Date.now() / 1000)
 
   try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: await createAuthorization(secretId, secretKey, timestamp, payload),
-        'Content-Type': 'application/json; charset=utf-8',
-        Host: host,
-        'X-TC-Action': action,
-        'X-TC-Version': version,
-        'X-TC-Timestamp': String(timestamp),
-        'X-TC-Region': region,
-      },
-      body: payload,
-    })
-    const result = await response.json()
-    const tencentResponse = result?.Response
-    if (!response.ok || tencentResponse?.Error || typeof tencentResponse?.Audio !== 'string') {
-      const code = tencentResponse?.Error?.Code || `HTTP_${response.status}`
-      console.error('Tencent TTS failed', code, tencentResponse?.RequestId)
-      return jsonResponse({ error: `语音服务暂时不可用 (${code})` }, 502)
-    }
-    return jsonResponse({
-      audio: tencentResponse.Audio,
-      codec: 'mp3',
-      requestId: tencentResponse.RequestId,
-    })
+    return await withPaidBudget(owner, 'speech', encoder.encode(speechRequest.text).length, async () => {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: await createAuthorization(secretId, secretKey, timestamp, payload),
+          'Content-Type': 'application/json; charset=utf-8',
+          Host: host,
+          'X-TC-Action': action,
+          'X-TC-Version': version,
+          'X-TC-Timestamp': String(timestamp),
+          'X-TC-Region': region,
+        },
+        body: payload,
+      })
+      const result = await response.json()
+      const tencentResponse = result?.Response
+      if (!response.ok || tencentResponse?.Error || typeof tencentResponse?.Audio !== 'string') {
+        const code = tencentResponse?.Error?.Code || `HTTP_${response.status}`
+        console.error('Tencent TTS failed', code, tencentResponse?.RequestId)
+        return jsonResponse({ error: `语音服务暂时不可用 (${code})` }, 502)
+      }
+      return jsonResponse({
+        audio: tencentResponse.Audio,
+        codec: 'mp3',
+        requestId: tencentResponse.RequestId,
+      })
+    }, (response) => response.status === 200 ? speechRequest.text.length : 0)
   } catch (error) {
+    if (error instanceof BudgetExceededError) return jsonResponse({ error: error.message }, 429)
     console.error('Tencent TTS request failed', error)
     return jsonResponse({ error: '连接语音服务失败，请稍后重试' }, 502)
   }

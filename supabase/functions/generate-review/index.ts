@@ -1,5 +1,6 @@
 import { resolveOwner } from '../_shared/resolve-owner.ts'
 import { callAiProvider, hasAiProviderKey, parseAiProvider } from '../_shared/ai-provider.ts'
+import { BudgetExceededError } from '../_shared/paid-budget.ts'
 import type { AiProvider } from '../_shared/ai-provider.ts'
 
 const corsHeaders = {
@@ -154,7 +155,7 @@ Deno.serve(async (request) => {
   const tokenUsage: TokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const result = await callAiProvider(reviewRequest.provider, [
+      const result = await callAiProvider(owner, reviewRequest.provider, [
         { role: 'system', content: systemPrompt(reviewRequest.questionCount, reviewRequest.difficulty) },
         { role: 'user', content: `请基于以下词汇数据生成题目，并返回 JSON：\n${JSON.stringify({ words })}` },
       ], { timeout: 90_000, maxTokens: 12000, json: true })
@@ -165,6 +166,7 @@ Deno.serve(async (request) => {
       if (quiz) return jsonResponse({ ...quiz, tokenUsage })
       lastError = 'AI 未能生成完整的四选一题'
     } catch (cause) {
+      if (cause instanceof BudgetExceededError) return jsonResponse({ error: cause.message }, 429)
       lastError = cause instanceof Error ? cause.message : 'AI 服务调用失败'
     }
   }

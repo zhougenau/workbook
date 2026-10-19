@@ -10,6 +10,7 @@
 - 与 Web 一致的 10/20/50 条分页、首页/上下页/末页导航
 - 词库只读显示 0–5 级熟练度，在编辑词条时调整
 - 从粘贴文本智能提取单词、中文释义和英文例句
+- 微信登录后输入新单词，AI 自动补全空白的中文释义和英文例句；不会覆盖手写内容或智能选取结果，需部署 `complete-word` Edge Function
 - Supabase `mini-health` 连通性检查
 - `wx.login` 客户端流程与 `wechat-login` Edge Function
 - 本地优先的 Supabase 双向词条同步

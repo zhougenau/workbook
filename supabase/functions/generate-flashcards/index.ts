@@ -1,5 +1,6 @@
 import { resolveOwner } from '../_shared/resolve-owner.ts'
 import { callAiProvider, hasAiProviderKey, parseAiProvider } from '../_shared/ai-provider.ts'
+import { BudgetExceededError } from '../_shared/paid-budget.ts'
 import type { AiProvider } from '../_shared/ai-provider.ts'
 
 const corsHeaders = {
@@ -165,7 +166,7 @@ Deno.serve(async (request) => {
   const tokenUsage: TokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const generated = await callAiProvider(flashcardRequest.provider, [
+      const generated = await callAiProvider(owner, flashcardRequest.provider, [
         { role: 'system', content: systemPrompt() },
         { role: 'user', content: `请为以下词汇生成卡片：\n${JSON.stringify({ words })}` },
       ], { timeout: 60_000, maxTokens: 7000, temperature: 0.45, json: true })
@@ -175,6 +176,7 @@ Deno.serve(async (request) => {
       const cards = validateCards(JSON.parse(generated.content), words)
       if (cards) return jsonResponse({ cards, tokenUsage })
     } catch (cause) {
+      if (cause instanceof BudgetExceededError) return jsonResponse({ error: cause.message }, 429)
       console.error(cause)
     }
   }

@@ -146,6 +146,15 @@ function generateReview(wordIds, questionCount, difficulty, provider) {
   return requestAi('/generate-review', { wordIds, questionCount, difficulty, provider })
 }
 
+async function completeWord(term, provider) {
+  const result = await requestAi('/complete-word', { term, provider })
+  if (!result || typeof result.meaning !== 'string' || !result.meaning.trim()
+    || typeof result.example !== 'string' || !result.example.trim()) {
+    throw new Error('AI 返回的补全内容不完整')
+  }
+  return { meaning: result.meaning.trim(), example: result.example.trim() }
+}
+
 async function generateFlashcards(wordIds, provider) {
   return parseGeneratedFlashcards(await requestAi('/generate-flashcards', { wordIds, provider }))
 }
@@ -164,6 +173,7 @@ async function generateSpeech(text) {
 
 module.exports = {
   checkHealth,
+  completeWord,
   generateFlashcards,
   generatePassage,
   generateReview,

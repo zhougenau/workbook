@@ -1,5 +1,6 @@
 const {
   checkHealth,
+  completeWord,
   generateFlashcards,
   generatePassage,
   generateReview,
@@ -65,7 +66,7 @@ function decorateQuiz(quiz) {
 Page({
   data: {
     entries: [],
-    appVersion: '1.7.0',
+    appVersion: '1.8.0',
     appUpdatedAt: '2026-10-16',
     visibleEntries: [],
     search: '',
@@ -94,6 +95,7 @@ Page({
     editError: '',
     analysisSource: '',
     message: '',
+    completionStatus: 'idle',
     captureExpanded: false,
     healthStatus: 'idle',
     healthMessage: '尚未检测 Supabase',
@@ -152,6 +154,9 @@ Page({
 
   onLoad() {
     this.chatRequestId = 0
+    this.completionRequestId = 0
+    this.completionEdits = { meaning: 0, note: 0 }
+    this.completionTimer = null
     this.speechCache = Object.create(null)
     this.speechRequests = Object.create(null)
     this.speechPrefetchGeneration = 0
@@ -177,6 +182,7 @@ Page({
 
   onUnload() {
     this.chatRequestId += 1
+    this.cancelWordCompletion()
     if (this.syncTimer) clearTimeout(this.syncTimer)
     if (this.advanceTimer) clearTimeout(this.advanceTimer)
     this.stopFlashcardAutoplay()
@@ -223,7 +229,49 @@ Page({
 
   handleFieldInput(event) {
     const { field } = event.currentTarget.dataset
-    this.setData({ [field]: event.detail.value })
+    if (field === 'term') {
+      this.cancelWordCompletion()
+      this.setData({ term: event.detail.value, completionStatus: 'idle' }, () => this.scheduleWordCompletion())
+      return
+    }
+    if (field === 'meaning' || field === 'note') this.completionEdits[field] += 1
+    this.setData({ [field]: event.detail.value }, () => {
+      if (this.data.completionStatus === 'loading' && this.data.meaning.trim() && this.data.note.trim()) {
+        this.cancelWordCompletion()
+        this.setData({ completionStatus: 'idle' })
+      }
+    })
+  },
+
+  cancelWordCompletion() {
+    this.completionRequestId += 1
+    if (this.completionTimer) clearTimeout(this.completionTimer)
+    this.completionTimer = null
+  },
+
+  scheduleWordCompletion() {
+    const term = this.data.term.trim()
+    if (!loadSession() || !term || term.length > 100 || !/[A-Za-z]/.test(term)
+      || (this.data.meaning.trim() && this.data.note.trim())) return
+
+    if (this.completionTimer) clearTimeout(this.completionTimer)
+    const requestId = this.completionRequestId
+    this.setData({ completionStatus: 'loading' })
+    this.completionTimer = setTimeout(async () => {
+      this.completionTimer = null
+      const meaningEdit = this.completionEdits.meaning
+      const noteEdit = this.completionEdits.note
+      try {
+        const completion = await completeWord(term, this.data.aiProvider)
+        if (requestId !== this.completionRequestId) return
+        const updates = {}
+        if (this.completionEdits.meaning === meaningEdit && !this.data.meaning.trim()) updates.meaning = completion.meaning
+        if (this.completionEdits.note === noteEdit && !this.data.note.trim()) updates.note = completion.example
+        this.setData({ ...updates, completionStatus: Object.keys(updates).length ? 'done' : 'idle' })
+      } catch {
+        if (requestId === this.completionRequestId) this.setData({ completionStatus: 'error' })
+      }
+    }, 700)
   },
 
   handleSearch(event) {
@@ -362,7 +410,8 @@ Page({
     const provider = AI_PROVIDERS[Number(event.detail.value)]
     if (!provider) return
     wx.setStorageSync(AI_PROVIDER_KEY, provider.id)
-    this.setData({ aiProvider: provider.id, aiProviderIndex: Number(event.detail.value) })
+    this.cancelWordCompletion()
+    this.setData({ aiProvider: provider.id, aiProviderIndex: Number(event.detail.value), completionStatus: 'idle' }, () => this.scheduleWordCompletion())
   },
 
   openWordChat(event) {
@@ -851,15 +900,18 @@ Page({
       return
     }
 
+    this.cancelWordCompletion()
     this.setData({
       term: result.term,
       meaning: result.meaning,
       note: result.example,
+      completionStatus: 'idle',
       message: '智能分析完成，请确认后收录',
     })
   },
 
   addEntry() {
+    if (this.data.completionStatus === 'loading') return
     const term = this.data.term.trim()
     if (!term) {
       this.setData({ message: '请先填写单词或短语' })
@@ -872,6 +924,7 @@ Page({
       return
     }
 
+    this.cancelWordCompletion()
     const entry = createEntry({
       term,
       meaning: this.data.meaning,
@@ -883,6 +936,7 @@ Page({
       meaning: '',
       note: '',
       analysisSource: '',
+      completionStatus: 'idle',
       message: `已收录 “${entry.term}”`,
     })
     this.refreshEntries()
@@ -999,7 +1053,7 @@ Page({
         loginStatus: 'ok',
         loginMessage: '微信身份连接成功',
         userId: session.userId || '',
-      })
+      }, () => this.scheduleWordCompletion())
       await this.synchronize(false)
     } catch (error) {
       this.setData({
