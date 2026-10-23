@@ -1,4 +1,4 @@
-export type SyncStage = '验证登录状态' | '读取本地词条' | '下载云端词条' | '上传本地词条' | '保存同步结果'
+export type SyncStage = '验证登录状态' | '读取本地词条' | '下载云端词条' | '上传本地词条' | '保存同步结果' | '同步复习进度'
 
 type ErrorDetails = {
   message?: unknown
@@ -29,6 +29,10 @@ function troubleshooting(stage: SyncStage, details: ErrorDetails) {
   const code = cleanDetail(details.code).toUpperCase()
   const status = cleanDetail(details.status)
   const message = cleanDetail(details.message).toLowerCase()
+
+  if (stage === '同步复习进度') {
+    return '确认已在 Supabase SQL Editor 执行复习状态迁移并部署 review-sync；复习记录仍保存在本地，完成部署后重新同步。'
+  }
 
   if (status === '401' || code.includes('JWT') || /jwt|token|session|登录/.test(message)) {
     return '退出后重新登录，再点击“立即同步”；若仍失败，检查 Supabase Auth 会话和项目 URL/Publishable Key 是否匹配。'

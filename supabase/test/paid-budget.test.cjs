@@ -226,3 +226,59 @@ test('Mini card speech prefetch retries 429 and stops after cancellation', async
   await new Promise(setImmediate)
   assert.equal(timers.length, 0)
 })
+
+test('review sync rejects foreign words and scopes writes to the authenticated owner', async () => {
+  const source = fs.readFileSync(path.join(__dirname, '../functions/review-sync/index.ts'), 'utf8')
+  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
+  let handler
+  let owned = false
+  const calls = []
+  const wordId = '00000000-0000-4000-8000-000000000001'
+  const admin = { from(table) {
+    assert.equal(table, 'vocabulary_entries')
+    return { select() { return this }, in: async () => ({ data: [{ id: wordId, user_id: owned ? 'owner' : 'other', deleted_at: null }] }) }
+  }, rpc: async (name, args) => { calls.push([name, args]); return { error: null } } }
+  admin.from = (table) => table === 'review_schedules'
+    ? { select() { return this }, eq: async (field, value) => {
+      assert.equal(field, 'owner_id')
+      assert.equal(value, 'owner')
+      return { data: [], error: null }
+    } }
+    : { select() { return this }, in: async () => ({ data: [{ id: wordId, user_id: owned ? 'owner' : 'other', deleted_at: null }], error: null }) }
+  vm.runInNewContext(code, {
+    exports: {},
+    require: () => ({ resolveOwner: async (authorization) => authorization ? { ownerId: 'owner', admin } : null }),
+    Deno: { serve: (callback) => { handler = callback }, env: { get: () => 'configured' } },
+    Response, console, Date, Number, Map, Set,
+  })
+  const url = 'https://example.test/review-sync'
+  assert.equal((await handler(new Request(url, { method: 'POST', body: '{}' }))).status, 401)
+  const schedule = { wordId, dueAt: '2026-10-24T09:00:00.000Z', intervalDays: 1, streak: 1, lastReviewedAt: '2026-10-23T09:00:00.000Z', updatedAt: '2026-10-23T09:00:00.000Z' }
+  const send = () => handler(new Request(url, { method: 'POST', headers: { Authorization: 'Bearer test' }, body: JSON.stringify({ schedules: [schedule] }) }))
+  assert.equal((await send()).status, 403)
+  assert.equal(calls.length, 0)
+  owned = true
+  assert.equal((await send()).status, 200)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0][0], 'merge_review_schedules')
+  assert.equal(calls[0][1].p_owner_id, 'owner')
+})
+
+test('Mini vocabulary writes preserve independent daily review schedules', () => {
+  const storage = new Map()
+  const wx = {
+    getStorageSync: (key) => storage.get(key),
+    setStorageSync: (key, value) => storage.set(key, value),
+    removeStorageSync: (key) => storage.delete(key),
+  }
+  const mini = { exports: {} }
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../apps/mini/utils/storage.js'), 'utf8'), {
+    module: mini, require: () => ({ normalizeVocabularyEntry: (value) => value }), wx, Date, console, Math,
+  })
+  const { initializeStorage, saveEntries, loadReviewSchedules, saveReviewSchedules } = mini.exports
+  initializeStorage()
+  saveReviewSchedules([{ wordId: 'word', dueAt: '2026-10-24T09:00:00.000Z' }])
+  saveEntries([{ id: 'word', term: 'test' }])
+  assert.equal(loadReviewSchedules()[0].wordId, 'word')
+  assert.equal(mini.exports.loadEntries()[0].id, 'word')
+})

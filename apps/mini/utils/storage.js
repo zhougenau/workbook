@@ -12,7 +12,7 @@ function createUuid() {
 }
 
 function emptyState() {
-  return { version: CURRENT_VERSION, entries: [] }
+  return { version: CURRENT_VERSION, entries: [], reviewSchedules: [] }
 }
 
 function normalizeEntry(value) {
@@ -26,6 +26,7 @@ function readState() {
       return {
         version: CURRENT_VERSION,
         entries: saved.entries.map(normalizeEntry).filter(Boolean),
+        reviewSchedules: Array.isArray(saved.reviewSchedules) ? saved.reviewSchedules : [],
       }
     }
 
@@ -45,6 +46,7 @@ function writeState(state) {
   wx.setStorageSync(STORAGE_KEY, {
     version: CURRENT_VERSION,
     entries: state.entries,
+    reviewSchedules: state.reviewSchedules,
   })
 }
 
@@ -70,7 +72,15 @@ function loadAllEntries() {
 }
 
 function saveEntries(entries) {
-  writeState({ version: CURRENT_VERSION, entries })
+  writeState({ ...readState(), entries })
+}
+
+function loadReviewSchedules() {
+  return readState().reviewSchedules
+}
+
+function saveReviewSchedules(reviewSchedules) {
+  writeState({ ...readState(), reviewSchedules })
 }
 
 function createEntry(values) {
@@ -93,5 +103,7 @@ module.exports = {
   initializeStorage,
   loadAllEntries,
   loadEntries,
+  loadReviewSchedules,
   saveEntries,
+  saveReviewSchedules,
 }

@@ -62,6 +62,27 @@
     </view>
   </view>
 
+  <view class="daily-review">
+    <view class="daily-review-heading">
+      <text>今日待复习 {{dueReviewCount}}</text>
+      <button bindtap="startDailyReview" disabled="{{!dueReviewCount}}">开始复习</button>
+    </view>
+    <view wx:if="{{dailyWord}}" class="daily-review-session">
+      <text>本轮剩余 {{dailyWordIds.length}} 词</text>
+      <text class="daily-review-term">{{dailyWord.term}}</text>
+      <button wx:if="{{!dailyRevealed}}" bindtap="revealDailyWord">揭晓释义</button>
+      <view wx:else>
+        <text class="daily-review-meaning">{{dailyWord.meaning || '暂无释义'}}</text>
+        <text wx:if="{{dailyWord.note}}" class="daily-review-meaning">{{dailyWord.note}}</text>
+        <view class="daily-review-actions">
+          <button data-remembered="false" bindtap="rateDailyWord">没记住</button>
+          <button data-remembered="true" bindtap="rateDailyWord">记住了</button>
+        </view>
+      </view>
+      <button class="daily-review-exit" bindtap="closeDailyReview">退出</button>
+    </view>
+  </view>
+
   <view class="capture-section">
     <view class="section-heading section-heading--capture">
       <text class="section-index">01</text>

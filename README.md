@@ -141,6 +141,8 @@ Web 词库工具栏和小程序 AI 学习工坊都可选择 DeepSeek 或通义�
 
 若需将每日文本累计预留量从 100,000 提高至 1,000,000 个 token，在 Supabase Web SQL Editor **手动执行** `supabase/migrations/20261023000100_increase_text_budget.sql`，再重新部署 `paid-usage` 以显示新上限。其他限额不变；十倍额度会提高最高模型支出，仍须在模型服务商控制台设置支出上限。不要重复执行历史迁移或使用数据库 CLI。
 
+每日待复习队列无需 AI：新词立即到期，每次最多取 20 个逾期词；记住后间隔依次为 1、3、7、14、30 天，没记住则 10 分钟后再次到期。进度先写入本地，与 `mastery` 分开保存。要启用 Web/小程序跨端同步，先在 Supabase Web SQL Editor **手动执行** `supabase/migrations/20261023000200_create_review_schedules.sql`，确认成功后再部署 `review-sync` Edge Function 和新版 Web/小程序；迁移前不要部署新客户端。登录后词条同步完成再同步复习进度，离线答题会保留在本地，下次连接时同步。
+
 Web 工具栏和小程序 AI 学习工坊显示当前 owner 的 UTC 每日实际用量、累计预留、文本/语音各自最近 1 分钟请求数及当前并发数；可手动刷新，付费调用结束后也会刷新。累计预留不会因请求完成而扣回，不等于实时未使用余额。`paid-usage` 是只读函数，须携带 Web JWT 或 Mini session，经服务端解析 owner 后读取预算表。`supabase/config.toml` 禁用网关 JWT 校验以支持 Mini session，但函数内部仍严格验证会话。
 
 部署前运行 `node --test supabase/test/paid-budget.test.cjs` 检查守卫。确认 SQL Editor 已成功执行预算迁移后，在项目根目录部署函数：

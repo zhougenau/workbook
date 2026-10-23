@@ -12,6 +12,7 @@ const {
   setPaidUsageListener,
   sendWordChatMessage,
   synchronizeEntries,
+  synchronizeReviewSchedules,
 } = require('../../utils/api')
 const {
   AI_PROVIDERS,
@@ -22,6 +23,8 @@ const {
   VOCABULARY_SORT_OPTIONS,
   analyzeVocabularyText,
   calculateMasteryChanges,
+  dueReviewWords,
+  scheduleReview,
   clampFlashcardIndex,
   filterAndSortVocabularyEntries,
   normalizeAiProvider,
@@ -32,7 +35,7 @@ const {
   MAX_WORD_CHAT_MESSAGE_LENGTH,
   WORD_CHAT_SUGGESTIONS,
 } = require('../../vendor/wordbook-core')
-const { createEntry, loadAllEntries, loadEntries, saveEntries } = require('../../utils/storage')
+const { createEntry, loadAllEntries, loadEntries, loadReviewSchedules, saveEntries, saveReviewSchedules } = require('../../utils/storage')
 const { destroySpeech, playSpeech, setSpeechRate, stopSpeech } = require('../../utils/speech')
 
 const masteryLabels = ['未掌握', '刚认识', '有印象', '基本理解', '较熟练', '已掌握']
@@ -68,6 +71,10 @@ function decorateQuiz(quiz) {
 Page({
   data: {
     entries: [],
+    dueReviewCount: 0,
+    dailyWordIds: [],
+    dailyWord: null,
+    dailyRevealed: false,
     appVersion: '1.9.0',
     appUpdatedAt: '2026-10-19',
     visibleEntries: [],
@@ -195,9 +202,20 @@ Page({
     if (this.syncTimer) clearTimeout(this.syncTimer)
     if (this.advanceTimer) clearTimeout(this.advanceTimer)
     this.stopFlashcardAutoplay()
+    this.onHide()
     this.cancelSpeechPrefetch()
     this.speechRequestId += 1
     destroySpeech()
+  },
+
+  onShow() {
+    this.refreshEntries()
+    if (!this.dailyRefreshTimer) this.dailyRefreshTimer = setInterval(() => this.refreshEntries(), 60000)
+  },
+
+  onHide() {
+    if (this.dailyRefreshTimer) clearInterval(this.dailyRefreshTimer)
+    this.dailyRefreshTimer = null
   },
 
   toggleConnectionDetails() {
@@ -238,6 +256,8 @@ Page({
 
   refreshEntries() {
     const entries = decorateEntries(loadEntries(), this.data.aiSelectedIds)
+    const dueReviewCount = dueReviewWords(entries, loadReviewSchedules(), new Date().toISOString()).length
+    const dailyWord = entries.find((entry) => entry.id === this.data.dailyWordIds[0]) || null
     const filteredEntries = filterAndSortVocabularyEntries(entries, {
       search: this.data.search,
       masteryFilter: this.data.masteryFilter,
@@ -246,6 +266,8 @@ Page({
     const pagination = paginate(filteredEntries, this.data.currentPage, this.data.pageSize)
     this.setData({
       entries,
+      dueReviewCount,
+      dailyWord,
       visibleEntries: pagination.items,
       pageSelectionComplete: pagination.items.length > 0 && pagination.items.slice(0, 10).every((entry) => entry.aiSelected),
       currentPage: pagination.currentPage,
@@ -254,6 +276,38 @@ Page({
       pageFirstItem: pagination.firstItemNumber,
       pageLastItem: pagination.lastItemNumber,
     })
+  },
+
+  startDailyReview() {
+    const due = dueReviewWords(loadEntries(), loadReviewSchedules(), new Date().toISOString())
+    const dailyWordIds = due.slice(0, 20).map((word) => word.id)
+    this.setData({ dailyWordIds, dailyWord: due[0] || null, dailyRevealed: false })
+  },
+
+  closeDailyReview() {
+    this.setData({ dailyWordIds: [], dailyWord: null, dailyRevealed: false })
+  },
+
+  revealDailyWord() {
+    this.setData({ dailyRevealed: true })
+  },
+
+  rateDailyWord(event) {
+    const word = this.data.dailyWord
+    if (!word || !this.data.dailyRevealed) return
+    const schedules = loadReviewSchedules()
+    const previous = schedules.find((schedule) => schedule.wordId === word.id)
+    const next = scheduleReview(word.id, previous, event.currentTarget.dataset.remembered === 'true', new Date().toISOString())
+    try {
+      saveReviewSchedules([...schedules.filter((schedule) => schedule.wordId !== word.id), next])
+    } catch {
+      wx.showToast({ title: '保存复习进度失败', icon: 'none' })
+      return
+    }
+    const dailyWordIds = this.data.dailyWordIds.slice(1)
+    this.setData({ dailyWordIds, dailyWord: this.data.entries.find((entry) => entry.id === dailyWordIds[0]) || null, dailyRevealed: false })
+    this.refreshEntries()
+    this.queueSync()
   },
 
   handleFieldInput(event) {
@@ -1146,6 +1200,18 @@ Page({
       const result = await synchronizeEntries(loadAllEntries())
       const entries = result.entries.map((entry) => ({ ...entry, syncStatus: 'synced' }))
       saveEntries(entries)
+      const activeIds = new Set(entries.filter((entry) => !entry.deletedAt).map((entry) => entry.id))
+      const schedules = loadReviewSchedules().filter((schedule) => activeIds.has(schedule.wordId))
+      let mergedSchedules = []
+      for (let index = 0; index < schedules.length || index === 0; index += 500) {
+        const response = await synchronizeReviewSchedules(schedules.slice(index, index + 500))
+        mergedSchedules = response.schedules.filter((schedule) => activeIds.has(schedule.wordId))
+      }
+      const latestLocal = new Map(loadReviewSchedules().map((schedule) => [schedule.wordId, schedule]))
+      saveReviewSchedules(mergedSchedules.map((schedule) => {
+        const local = latestLocal.get(schedule.wordId)
+        return local && Date.parse(local.updatedAt) > Date.parse(schedule.updatedAt) ? local : schedule
+      }))
       this.refreshEntries()
       this.setData({
         syncStatus: 'ok',

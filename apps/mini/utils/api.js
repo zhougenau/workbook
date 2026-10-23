@@ -109,6 +109,22 @@ async function synchronizeEntries(entries) {
   }
 }
 
+async function synchronizeReviewSchedules(schedules) {
+  const session = loadSession()
+  if (!session) throw new Error('请先连接微信身份')
+  try {
+    return await request('/review-sync', {
+      method: 'POST',
+      data: { schedules },
+      header: { Authorization: `Bearer ${session.token}` },
+      timeout: 30000,
+    })
+  } catch (error) {
+    if (error.statusCode === 401) wx.removeStorageSync(SESSION_KEY)
+    throw error
+  }
+}
+
 async function linkWechatAccount(code) {
   const session = loadSession()
   if (!session) throw new Error('请先连接微信身份')
@@ -211,4 +227,5 @@ module.exports = {
   setPaidUsageListener,
   sendWordChatMessage,
   synchronizeEntries,
+  synchronizeReviewSchedules,
 }

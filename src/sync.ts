@@ -1,6 +1,6 @@
 import type { User } from '@supabase/supabase-js'
 import { mergeEntriesLastWriteWins, normalizeTerm, reconcileDuplicateTerms } from '@wordbook/core'
-import { db, type VocabularyEntry } from './storage'
+import { db, loadReviewSchedules, type StoredReviewSchedule, type VocabularyEntry } from './storage'
 import { getAccessToken, supabase } from './supabase'
 import { createSyncError } from './syncError'
 
@@ -156,6 +156,40 @@ async function synchronizeOnce(user: User): Promise<SyncResult> {
   } catch (error) {
     throw createSyncError('保存同步结果', error)
   }
+
+  const activeIds = new Set(mergedEntries.filter((entry) => !entry.deletedAt).map((entry) => entry.id))
+  const localSchedules = await loadReviewSchedules(user.id)
+  const remapped = localSchedules.map((schedule) => ({
+    ...schedule,
+    wordId: idRemap[schedule.wordId] ?? schedule.wordId,
+  })).filter((schedule) => activeIds.has(schedule.wordId))
+  const schedulesById = new Map<string, StoredReviewSchedule>()
+  for (const schedule of remapped) {
+    const previous = schedulesById.get(schedule.wordId)
+    if (!previous || Date.parse(schedule.updatedAt) > Date.parse(previous.updatedAt)) schedulesById.set(schedule.wordId, schedule)
+  }
+  const schedules = [...schedulesById.values()]
+  const remoteSchedules = new Map<string, StoredReviewSchedule>()
+  const accessToken = await getAccessToken()
+  for (let index = 0; index < schedules.length || index === 0; index += 500) {
+    const { data: result, error } = await supabase.functions.invoke('review-sync', {
+      body: { schedules: schedules.slice(index, index + 500) },
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    if (error) throw createSyncError('同步复习进度', error)
+    for (const schedule of result.schedules as StoredReviewSchedule[]) {
+      if (activeIds.has(schedule.wordId)) remoteSchedules.set(schedule.wordId, { ...schedule, ownerId: user.id, syncStatus: 'synced' })
+    }
+  }
+  await db.transaction('rw', db.reviewSchedules, async () => {
+    await db.reviewSchedules.bulkDelete(Object.keys(idRemap))
+    const latestLocal = await db.reviewSchedules.bulkGet([...remoteSchedules.keys()])
+    const merged = [...remoteSchedules.values()].map((schedule, index) => {
+      const local = latestLocal[index]
+      return local && Date.parse(local.updatedAt) > Date.parse(schedule.updatedAt) ? local : schedule
+    })
+    await db.reviewSchedules.bulkPut(merged)
+  })
 
   return { idRemap, repairedCount: Object.keys(idRemap).length }
 }

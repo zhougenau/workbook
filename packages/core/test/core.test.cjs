@@ -127,3 +127,23 @@ test('shares word chat history limits and response validation', () => {
   assert.deepEqual(core.parseWordChatResponse(response), response)
   assert.throws(() => core.parseWordChatResponse({ reply: '', tokenUsage: response.tokenUsage }))
 })
+
+test('daily review schedules short retry and increasing intervals', () => {
+  const now = '2026-10-23T09:00:00.000Z'
+  const retry = core.scheduleReview('w', undefined, false, now)
+  assert.equal(retry.dueAt, '2026-10-23T09:10:00.000Z')
+  assert.equal(retry.streak, 0)
+  const first = core.scheduleReview('w', retry, true, now)
+  assert.equal(first.dueAt, '2026-10-24T09:00:00.000Z')
+  const second = core.scheduleReview('w', first, true, now)
+  assert.equal(second.intervalDays, 3)
+  assert.equal(core.scheduleReview('w', second, false, now).streak, 0)
+})
+
+test('daily review queues only due words oldest first without changing source order', () => {
+  const words = [entry({ id: 'b' }), entry({ id: 'a' }), entry({ id: 'c', deletedAt: '2026-02-01T00:00:00.000Z' })]
+  const schedules = [core.scheduleReview('b', undefined, true, '2026-10-23T09:00:00.000Z')]
+  assert.deepEqual(core.dueReviewWords(words, schedules, '2026-10-23T10:00:00.000Z').map((word) => word.id), ['a'])
+  assert.deepEqual(words.map((word) => word.id), ['b', 'a', 'c'])
+  assert.deepEqual(core.dueReviewWords([entry({ id: 'b' })], [{ wordId: 'b', dueAt: '2026-10-23T09:00:00+00:00' }], '2026-10-23T09:00:00.000Z').map((word) => word.id), ['b'])
+})

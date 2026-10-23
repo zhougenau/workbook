@@ -15,6 +15,35 @@ function normalizeAiProvider(value) {
 	return isAiProvider(value) ? value : DEFAULT_AI_PROVIDER;
 }
 //#endregion
+//#region src/daily-review.ts
+var intervals = [
+	1,
+	3,
+	7,
+	14,
+	30
+];
+function scheduleReview(wordId, previous, remembered, now) {
+	const streak = remembered ? Math.min((previous?.streak ?? 0) + 1, intervals.length) : 0;
+	const intervalDays = remembered ? intervals[streak - 1] : 0;
+	return {
+		wordId,
+		dueAt: new Date(Date.parse(now) + (remembered ? intervalDays * 864e5 : 6e5)).toISOString(),
+		intervalDays,
+		streak,
+		lastReviewedAt: now,
+		updatedAt: now
+	};
+}
+function dueReviewWords(words, schedules, now) {
+	const byId = new Map(schedules.map((schedule) => [schedule.wordId, schedule]));
+	return words.filter((word) => !word.deletedAt && Date.parse(byId.get(word.id)?.dueAt ?? word.createdAt) <= Date.parse(now)).sort((left, right) => {
+		const leftDue = byId.get(left.id)?.dueAt ?? left.createdAt;
+		const rightDue = byId.get(right.id)?.dueAt ?? right.createdAt;
+		return Date.parse(leftDue) - Date.parse(rightDue) || left.id.localeCompare(right.id);
+	});
+}
+//#endregion
 //#region src/flashcards.ts
 function parseGeneratedFlashcards(value) {
 	if (!value || typeof value !== "object") throw new Error("AI 返回了无法识别的卡片格式");
@@ -322,6 +351,7 @@ exports.appendWordChatReply = appendWordChatReply;
 exports.calculateMasteryChanges = calculateMasteryChanges;
 exports.clampFlashcardIndex = clampFlashcardIndex;
 exports.clampMastery = clampMastery;
+exports.dueReviewWords = dueReviewWords;
 exports.filterAndSortVocabularyEntries = filterAndSortVocabularyEntries;
 exports.isAiProvider = isAiProvider;
 exports.isLegacyVocabularyEntry = isLegacyVocabularyEntry;
@@ -335,5 +365,6 @@ exports.paginate = paginate;
 exports.parseGeneratedFlashcards = parseGeneratedFlashcards;
 exports.parseWordChatResponse = parseWordChatResponse;
 exports.reconcileDuplicateTerms = reconcileDuplicateTerms;
+exports.scheduleReview = scheduleReview;
 exports.selectFlashcardWords = selectFlashcardWords;
 exports.validateSyncEntry = validateSyncEntry;

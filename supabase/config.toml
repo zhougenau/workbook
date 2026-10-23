@@ -21,6 +21,9 @@ verify_jwt = false
 [functions.paid-usage]
 verify_jwt = false
 
+[functions.review-sync]
+verify_jwt = false
+
 [functions.mini-health]
 verify_jwt = false
 

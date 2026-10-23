@@ -5,6 +5,17 @@
   background-color: #f4f0e6;
 }
 
+.daily-review { padding: 24rpx 0; border-bottom: 1rpx solid #c9c4b8; }
+.daily-review-heading { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; color: #20231f; font-size: 28rpx; font-weight: 700; }
+.daily-review-heading button, .daily-review-session button { margin: 0; padding: 0 20rpx; color: #fffaf0; background: #315b47; border-radius: 0; font-size: 23rpx; }
+.daily-review-heading button[disabled] { opacity: .45; }
+.daily-review-session { display: flex; padding: 24rpx 0; flex-direction: column; gap: 14rpx; }
+.daily-review-term { font-family: "STSong", "Songti SC", serif; font-size: 34rpx; font-weight: 700; overflow-wrap: anywhere; }
+.daily-review-meaning { display: block; padding: 6rpx 0; font-size: 26rpx; }
+.daily-review-actions { display: flex; gap: 16rpx; }
+.daily-review-actions button { flex: 1; }
+.daily-review-session .daily-review-exit { align-self: flex-end; background: #a43c2d; }
+
 .app-meta {
   display: flex;
   margin-top: 28rpx;

@@ -4,6 +4,8 @@ import {
   filterAndSortVocabularyEntries,
   normalizeAiProvider,
   paginate,
+  dueReviewWords,
+  scheduleReview,
   type AiProvider,
   type MasteryFilter,
   type VocabularySort,
@@ -47,9 +49,12 @@ import {
   deleteEntry as deleteStoredEntry,
   initializeStorage,
   loadEntries,
+  loadReviewSchedules,
   parseBackup,
   saveEntries,
   saveEntry,
+  saveReviewSchedule,
+  type StoredReviewSchedule,
   type VocabularyEntry,
 } from './storage'
 import { isCloudConfigured, supabase } from './supabase'
@@ -138,6 +143,10 @@ function pronounce(text: string) {
 
 function App() {
   const [entries, setEntries] = useState<VocabularyEntry[]>([])
+  const [reviewSchedules, setReviewSchedules] = useState<StoredReviewSchedule[]>([])
+  const [dailyWordIds, setDailyWordIds] = useState<string[]>([])
+  const [dailyRevealed, setDailyRevealed] = useState(false)
+  const [dailyError, setDailyError] = useState('')
   const [user, setUser] = useState<User | null>(null)
   const [paidUsage, setPaidUsage] = useState<PaidUsage | null>(null)
   const [paidUsageStatus, setPaidUsageStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
@@ -317,6 +326,7 @@ function App() {
     if (!user) throw new Error('请先登录后再生成复习题')
     const result = await synchronize(user)
     setEntries(await loadEntries(user.id))
+    setReviewSchedules(await loadReviewSchedules(user.id))
     setSelectedWordIds((selected) => selected.map((id) => result.idRemap[id] ?? id))
     setSyncState('synced')
     return result.idRemap
@@ -364,6 +374,7 @@ function App() {
     try {
       const result = await synchronize(activeUser)
       setEntries(await loadEntries(activeUser.id))
+      setReviewSchedules(await loadReviewSchedules(activeUser.id))
       setSelectedWordIds((selected) => selected.map((id) => result.idRemap[id] ?? id))
       setSyncState('synced')
       setSyncMessage(result.repairedCount
@@ -415,6 +426,7 @@ function App() {
       if (!active) return
       setUser(sessionUser)
       setEntries(await loadEntries(sessionUser?.id ?? null))
+      setReviewSchedules(await loadReviewSchedules(sessionUser?.id ?? null))
       if (sessionUser) void syncFromEffect(sessionUser)
     }
 
@@ -424,7 +436,10 @@ function App() {
       setPaidUsage(null)
       setPaidUsageStatus('idle')
       setUser(session?.user ?? null)
+      setReviewSchedules([])
+      setDailyWordIds([])
       void loadEntries(session?.user.id ?? null).then(setEntries)
+      void loadReviewSchedules(session?.user.id ?? null).then(setReviewSchedules)
       if (session?.user) void syncFromEffect(session.user)
     }).data.subscription
 
@@ -478,6 +493,30 @@ function App() {
     setEntries(nextEntries)
     await saveEntries(nextEntries)
     if (user) scheduleSync(user)
+  }
+
+  const dueWords = dueReviewWords(entries, reviewSchedules, currentTime.toISOString())
+  const dailyWord = entries.find((entry) => entry.id === dailyWordIds[0])
+
+  const rateDailyWord = async (remembered: boolean) => {
+    if (!dailyWord) return
+    const now = new Date().toISOString()
+    const previous = reviewSchedules.find((schedule) => schedule.wordId === dailyWord.id)
+    const next: StoredReviewSchedule = {
+      ...scheduleReview(dailyWord.id, previous, remembered, now),
+      ownerId: user?.id ?? null,
+      syncStatus: user ? 'pending' : 'local',
+    }
+    try {
+      await saveReviewSchedule(next)
+      setReviewSchedules((schedules) => [...schedules.filter((schedule) => schedule.wordId !== next.wordId), next])
+      setDailyWordIds((ids) => ids.slice(1))
+      setDailyRevealed(false)
+      setDailyError('')
+      if (user) scheduleSync(user)
+    } catch {
+      setDailyError('保存复习进度失败，请重试')
+    }
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -930,6 +969,32 @@ function App() {
               <strong>{masteredCount}</strong><span>已掌握</span>
             </button>
           </div>
+        </section>
+
+        <section className="daily-review" aria-labelledby="daily-review-title">
+          <div className="daily-review-heading">
+            <h2 id="daily-review-title">今日待复习 <span>{dueWords.length}</span></h2>
+            <button type="button" onClick={() => { setDailyWordIds(dueWords.slice(0, 20).map((word) => word.id)); setDailyRevealed(false) }} disabled={!dueWords.length}>
+              <RotateCcw size={17} />开始复习
+            </button>
+          </div>
+          {dailyWord && (
+            <div className="daily-review-session">
+              <small>本轮剩余 {dailyWordIds.length} 词</small>
+              <strong>{dailyWord.term}</strong>
+              {dailyRevealed ? (
+                <>
+                  <p>{dailyWord.meaning || '暂无释义'}{dailyWord.note && <small>{dailyWord.note}</small>}</p>
+                  <div className="daily-review-actions">
+                    <button type="button" onClick={() => void rateDailyWord(false)}>没记住</button>
+                    <button type="button" onClick={() => void rateDailyWord(true)}>记住了</button>
+                  </div>
+                </>
+              ) : <button type="button" onClick={() => setDailyRevealed(true)}>揭晓释义</button>}
+              <button className="daily-review-close" type="button" onClick={() => setDailyWordIds([])} aria-label="退出今日复习" title="退出今日复习"><X size={17} /></button>
+              {dailyError && <p role="alert">{dailyError}</p>}
+            </div>
+          )}
         </section>
 
         <section className="capture-panel" aria-labelledby="capture-title">

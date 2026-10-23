@@ -2,28 +2,43 @@ import Dexie, { type Table } from 'dexie'
 import {
   isLegacyVocabularyEntry,
   isVocabularyEntry,
+  type ReviewSchedule,
   type VocabularyEntry as CoreVocabularyEntry,
 } from '@wordbook/core'
 
 export type SyncStatus = 'local' | 'pending' | 'synced' | 'conflict'
 
 export type VocabularyEntry = CoreVocabularyEntry & { ownerId: string | null; syncStatus: SyncStatus }
+export type StoredReviewSchedule = ReviewSchedule & { ownerId: string | null; syncStatus: SyncStatus }
 
 const LEGACY_STORAGE_KEY = 'wordbook.entries.v1'
 const MIGRATION_KEY = 'wordbook.dexie.migrated'
 
 class WordbookDatabase extends Dexie {
   entries!: Table<VocabularyEntry, string>
+  reviewSchedules!: Table<StoredReviewSchedule, string>
 
   constructor() {
     super('wordbook')
     this.version(1).stores({
       entries: '&id, term, ownerId, updatedAt, deletedAt, syncStatus',
     })
+    this.version(2).stores({
+      entries: '&id, term, ownerId, updatedAt, deletedAt, syncStatus',
+      reviewSchedules: '&wordId, ownerId, updatedAt, syncStatus',
+    })
   }
 }
 
 export const db = new WordbookDatabase()
+
+export async function loadReviewSchedules(ownerId: string | null) {
+  return (await db.reviewSchedules.toArray()).filter((schedule) => schedule.ownerId === ownerId || schedule.ownerId === null)
+}
+
+export async function saveReviewSchedule(schedule: StoredReviewSchedule) {
+  await db.reviewSchedules.put(schedule)
+}
 
 export async function initializeStorage() {
   if (localStorage.getItem(MIGRATION_KEY)) return
