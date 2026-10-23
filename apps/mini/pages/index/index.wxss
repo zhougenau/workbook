@@ -12,9 +12,11 @@
 .daily-review-session { display: flex; padding: 24rpx 0; flex-direction: column; gap: 14rpx; }
 .daily-review-term { font-family: "STSong", "Songti SC", serif; font-size: 34rpx; font-weight: 700; overflow-wrap: anywhere; }
 .daily-review-meaning { display: block; padding: 6rpx 0; font-size: 26rpx; }
-.daily-review-actions { display: flex; gap: 16rpx; }
-.daily-review-actions button { flex: 1; }
-.daily-review-session .daily-review-exit { align-self: flex-end; background: #a43c2d; }
+.daily-review-preview-actions, .daily-review-actions { display: grid; width: 100%; gap: 12rpx; }
+.daily-review-preview-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.daily-review-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.daily-review-preview-actions button, .daily-review-actions button { box-sizing: border-box; width: 100%; min-width: 0; padding: 0 6rpx; white-space: nowrap; }
+.daily-review-session .daily-review-exit { background: #a43c2d; }
 
 .app-meta {
   display: flex;
