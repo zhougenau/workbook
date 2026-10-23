@@ -260,7 +260,7 @@ export function ReviewPanel({ provider, selectedWords, prepareWords, applyMaster
       </div>
       <TokenUsage quiz={quiz} />
       <div className="review-progress-track"><span style={{ width: `${((currentIndex + 1) / quiz.questions.length) * 100}%` }} /></div>
-      <span className="review-question-type">{question.word} · {question.type}</span>
+      <span className="review-question-type">{question.type}</span>
       <h3 id="review-question-title">{question.prompt}</h3>
       <div className="review-options">
         {question.options.map((option, index) => {
