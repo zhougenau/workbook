@@ -227,7 +227,9 @@ var questionWeights = {
 	meaning: 1,
 	reverse: 1.1,
 	cloze: 1.25,
-	usage: 1.4
+	usage: 1.4,
+	scenario: 1.4,
+	collocation: 1.4
 };
 function calculateMasteryChanges(quiz, answers, words, difficulty) {
 	const evidenceByWord = /* @__PURE__ */ new Map();

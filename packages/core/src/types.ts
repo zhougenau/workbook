@@ -1,6 +1,7 @@
 export type SyncStatus = 'local' | 'pending' | 'synced' | 'conflict'
 export type ReviewDifficulty = 'basic' | 'intermediate' | 'advanced'
-export type ReviewQuestionType = 'meaning' | 'reverse' | 'cloze' | 'usage'
+export type ReviewMode = 'standard' | 'context'
+export type ReviewQuestionType = 'meaning' | 'reverse' | 'cloze' | 'usage' | 'scenario' | 'collocation'
 
 export type VocabularyEntry = {
   id: string

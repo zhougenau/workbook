@@ -27,6 +27,18 @@ test('calculates mastery evidence with Web thresholds', () => {
   assert.equal(down.nextLevel, 1)
 })
 
+test('context questions contribute usage evidence without changing single-answer mastery', () => {
+  const quiz = { questions: [
+    { wordId: 'w', type: 'scenario', correctIndex: 0 },
+    { wordId: 'w', type: 'collocation', correctIndex: 1 },
+  ] }
+  const one = core.calculateMasteryChanges(quiz, { 0: 0 }, [entry({ id: 'w' })], 'basic')[0]
+  const both = core.calculateMasteryChanges(quiz, { 0: 0, 1: 1 }, [entry({ id: 'w' })], 'basic')[0]
+  assert.equal(one.nextLevel, 2)
+  assert.equal(both.evidence, 2.8)
+  assert.equal(both.nextLevel, 3)
+})
+
 test('normalizes and validates entry boundaries', () => {
   const normalized = core.normalizeVocabularyEntry({ id: 'old', term: '  Word ', mastery: 99 }, () => 'new-id', () => '2026-01-01T00:00:00.000Z')
   assert.equal(normalized.id, 'new-id')

@@ -192,6 +192,13 @@
         </view>
       </view>
       <view class="ai-control-row">
+        <text>练习方式</text>
+        <view class="segmented-control segmented-control--wide">
+          <button class="{{aiReviewMode === 'standard' ? 'active' : ''}}" data-mode="standard" bindtap="chooseAiReviewMode">综合复习</button>
+          <button class="{{aiReviewMode === 'context' ? 'active' : ''}}" data-mode="context" bindtap="chooseAiReviewMode">真实语境</button>
+        </view>
+      </view>
+      <view class="ai-control-row">
         <text>随机卡片数量</text>
         <view class="segmented-control">
           <button class="{{randomFlashcardCount === 10 ? 'active' : ''}}" data-count="10" bindtap="chooseRandomFlashcardCount">10</button>
@@ -313,7 +320,7 @@
         <text wx:else>{{quizCurrentIndex + 1}} / {{quiz.questions.length}}</text>
       </view>
       <view wx:if="{{currentQuestion}}" class="quiz-question">
-        <text class="question-index">QUESTION {{quizCurrentIndex + 1}}</text>
+        <text class="question-index">QUESTION {{quizCurrentIndex + 1}} · {{currentQuestion.typeLabel}}</text>
         <text class="question-prompt">{{currentQuestion.prompt}}</text>
         <view class="quiz-options">
           <button

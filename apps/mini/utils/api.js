@@ -184,8 +184,8 @@ function generatePassage(wordIds, length, provider) {
   return requestAi('/generate-passage', { wordIds, length, provider })
 }
 
-function generateReview(wordIds, questionCount, difficulty, provider) {
-  return requestAi('/generate-review', { wordIds, questionCount, difficulty, provider })
+function generateReview(wordIds, questionCount, difficulty, provider, mode = 'standard') {
+  return requestAi('/generate-review', { wordIds, questionCount, difficulty, provider, mode })
 }
 
 async function completeWord(term, provider) {

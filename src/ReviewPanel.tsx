@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { AiProvider } from '@wordbook/core'
 import { ArrowRight, BrainCircuit, Check, LoaderCircle, RotateCcw, X } from 'lucide-react'
-import { calculateMasteryChanges, generateReview, type MasteryChange, type ReviewDifficulty, type ReviewQuiz } from './review'
+import { calculateMasteryChanges, generateReview, type MasteryChange, type ReviewDifficulty, type ReviewMode, type ReviewQuiz } from './review'
 import type { VocabularyEntry } from './storage'
 
 type ReviewPanelProps = {
@@ -34,6 +34,7 @@ function TokenUsage({ quiz }: { quiz: ReviewQuiz }) {
 export function ReviewPanel({ provider, selectedWords, prepareWords, applyMasteryChanges, onClose, autoStart = false }: ReviewPanelProps) {
   const [questionCount, setQuestionCount] = useState(5)
   const [difficulty, setDifficulty] = useState<ReviewDifficulty>('basic')
+  const [mode, setMode] = useState<ReviewMode>('standard')
   const [quiz, setQuiz] = useState<ReviewQuiz | null>(null)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
@@ -67,7 +68,7 @@ export function ReviewPanel({ provider, selectedWords, prepareWords, applyMaster
         .sort(() => Math.random() - 0.5)
         .slice(0, 60)
       const effectiveQuestionCount = Math.max(questionCount, wordIds.length)
-      const result = await generateReview(wordIds, effectiveQuestionCount, difficulty, request.signal, provider)
+      const result = await generateReview(wordIds, effectiveQuestionCount, difficulty, request.signal, provider, mode)
       setQuizWords(canonicalWords)
       setQuiz(result)
       setCurrentIndex(0)
@@ -113,12 +114,19 @@ export function ReviewPanel({ provider, selectedWords, prepareWords, applyMaster
         <div className="review-panel-heading">
           <div>
             <span className="review-kicker"><BrainCircuit size={16} />AI REVIEW</span>
-            <h3 id="review-panel-title">生成选择题</h3>
+            <h3 id="review-panel-title">生成复习题</h3>
             <p>已选择 {selectedWords.length} 个单词，每个题源词至少覆盖 1 道题{selectedWords.length > 60 ? '，本轮随机抽取 60 个词' : ''}。</p>
           </div>
           <button className="review-close" type="button" onClick={onClose} title="退出复习选择" aria-label="退出复习选择"><X size={18} /></button>
         </div>
         <div className="review-settings">
+          <label>
+            <span>练习方式</span>
+            <select value={mode} onChange={(event) => setMode(event.target.value as ReviewMode)}>
+              <option value="standard">综合复习</option>
+              <option value="context">真实语境</option>
+            </select>
+          </label>
           <label>
             <span>最低题目数量</span>
             <select value={questionCount} onChange={(event) => setQuestionCount(Number(event.target.value))}>
@@ -260,7 +268,7 @@ export function ReviewPanel({ provider, selectedWords, prepareWords, applyMaster
       </div>
       <TokenUsage quiz={quiz} />
       <div className="review-progress-track"><span style={{ width: `${((currentIndex + 1) / quiz.questions.length) * 100}%` }} /></div>
-      <span className="review-question-type">{question.type}</span>
+      <span className="review-question-type">{{ meaning: '词义', reverse: '反向', cloze: '填空', usage: '用法', scenario: '场景选词', collocation: '搭配填空' }[question.type]}</span>
       <h3 id="review-question-title">{question.prompt}</h3>
       <div className="review-options">
         {question.options.map((option, index) => {

@@ -60,6 +60,7 @@ function decorateQuiz(quiz) {
     ...quiz,
     questions: quiz.questions.map((question, questionIndex) => ({
       ...question,
+      typeLabel: { meaning: '词义', reverse: '反向', cloze: '填空', usage: '用法', scenario: '场景选词', collocation: '搭配填空' }[question.type] || question.type,
       questionIndex,
       answered: false,
       selectedIndex: -1,
@@ -127,6 +128,7 @@ Page({
     aiProvider: DEFAULT_AI_PROVIDER,
     aiLength: 'short',
     aiDifficulty: 'basic',
+    aiReviewMode: 'standard',
     randomFlashcardCount: 10,
     aiStatus: 'idle',
     aiMessage: '从词库选择单词，生成专属学习材料',
@@ -484,6 +486,10 @@ Page({
     this.setData({ aiDifficulty: event.currentTarget.dataset.difficulty })
   },
 
+  chooseAiReviewMode(event) {
+    this.setData({ aiReviewMode: event.currentTarget.dataset.mode })
+  },
+
   chooseRandomFlashcardCount(event) {
     const count = Number(event.currentTarget.dataset.count)
     if ([10, 20, 50].includes(count)) this.setData({ randomFlashcardCount: count })
@@ -584,6 +590,7 @@ Page({
 
   async createReview() {
     if (this.data.aiStatus === 'checking') return
+    const mode = this.data.aiReviewMode
     this.stopFlashcardAutoplay()
     this.cancelSpeechPrefetch()
     if (this.advanceTimer) {
@@ -600,7 +607,11 @@ Page({
     try {
       const wordIds = await this.prepareAiWords()
       const questionCount = Math.max(5, wordIds.length)
-      const result = await generateReview(wordIds, questionCount, this.data.aiDifficulty, this.data.aiProvider)
+      const result = await generateReview(wordIds, questionCount, this.data.aiDifficulty, this.data.aiProvider, mode)
+      if (mode === 'context' && (!result.questions?.every((question) => ['scenario', 'collocation'].includes(question.type)) ||
+        !result.questions.some((question) => question.type === 'scenario') || !result.questions.some((question) => question.type === 'collocation'))) {
+        throw new Error('AI 未能生成完整的语境题，请重试')
+      }
       const quiz = decorateQuiz(result)
       const selected = new Set(wordIds)
       this.setData({
@@ -630,7 +641,7 @@ Page({
       wx.showToast({ title: '请先连接微信身份', icon: 'none' })
       return
     }
-    this.setData({ aiSelectedIds: [id], aiWorkshopExpanded: true, aiDifficulty: 'basic', quiz: null, currentQuestion: null }, () => {
+    this.setData({ aiSelectedIds: [id], aiWorkshopExpanded: true, aiDifficulty: 'basic', aiReviewMode: 'standard', quiz: null, currentQuestion: null }, () => {
       this.refreshEntries()
       wx.pageScrollTo({ selector: '#ai-review-section', duration: 300 })
       this.createReview()

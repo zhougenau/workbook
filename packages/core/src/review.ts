@@ -1,7 +1,7 @@
 import type { MasteryChange, ReviewDifficulty, ReviewQuestionType, ReviewQuiz, VocabularyEntry } from './types'
 
 const difficultyWeights: Record<ReviewDifficulty, number> = { basic: 1, intermediate: 1.15, advanced: 1.3 }
-const questionWeights: Record<ReviewQuestionType, number> = { meaning: 1, reverse: 1.1, cloze: 1.25, usage: 1.4 }
+const questionWeights: Record<ReviewQuestionType, number> = { meaning: 1, reverse: 1.1, cloze: 1.25, usage: 1.4, scenario: 1.4, collocation: 1.4 }
 
 export function calculateMasteryChanges(
   quiz: ReviewQuiz,
