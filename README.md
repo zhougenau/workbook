@@ -139,6 +139,8 @@ Web 词库工具栏和小程序 AI 学习工坊都可选择 DeepSeek 或通义�
 
 针对卡片语音预生成，再在 Supabase Web SQL Editor **手动执行** `supabase/migrations/20261019000100_separate_speech_budget.sql`：文本保留每分钟 10 次；语音单独每分钟 60 次、每天累计预留最多 30,000 个 UTF-8 字节；两类请求仍共用最多 2 个并发租约。语音额度提高会增加最坏情况下的服务商支出，务必检查腾讯云账户级支出限制。迁移成功后再重新部署 `generate-speech`（返回可重试/不可重试的拒绝原因）与 `paid-usage`（分开显示请求数），然后发布新版 Web/小程序；迁移前不要部署新用量接口（新接口依赖 `resource` 列）。
 
+若需将每日文本累计预留量从 100,000 提高至 1,000,000 个 token，在 Supabase Web SQL Editor **手动执行** `supabase/migrations/20261023000100_increase_text_budget.sql`，再重新部署 `paid-usage` 以显示新上限。其他限额不变；十倍额度会提高最高模型支出，仍须在模型服务商控制台设置支出上限。不要重复执行历史迁移或使用数据库 CLI。
+
 Web 工具栏和小程序 AI 学习工坊显示当前 owner 的 UTC 每日实际用量、累计预留、文本/语音各自最近 1 分钟请求数及当前并发数；可手动刷新，付费调用结束后也会刷新。累计预留不会因请求完成而扣回，不等于实时未使用余额。`paid-usage` 是只读函数，须携带 Web JWT 或 Mini session，经服务端解析 owner 后读取预算表。`supabase/config.toml` 禁用网关 JWT 校验以支持 Mini session，但函数内部仍严格验证会话。
 
 部署前运行 `node --test supabase/test/paid-budget.test.cjs` 检查守卫。确认 SQL Editor 已成功执行预算迁移后，在项目根目录部署函数：

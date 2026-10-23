@@ -49,7 +49,7 @@ Deno.serve(async (request) => {
 
     return jsonResponse({
       day,
-      text: { used: Number(daily.data?.actual_text_tokens ?? 0), reserved: Number(daily.data?.reserved_text_tokens ?? 0), limit: 100_000 },
+      text: { used: Number(daily.data?.actual_text_tokens ?? 0), reserved: Number(daily.data?.reserved_text_tokens ?? 0), limit: 1_000_000 },
       speech: { used: Number(daily.data?.actual_speech_chars ?? 0), reserved: Number(daily.data?.reserved_speech_chars ?? 0), limit: 30_000 },
       requests: { used: recentText.count ?? 0, limit: 10 },
       speechRequests: { used: recentSpeech.count ?? 0, limit: 60 },

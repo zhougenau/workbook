@@ -113,7 +113,7 @@ test('usage endpoint requires login and reads only the authenticated owner', asy
   const response = await handler(new Request(url, { headers: { Authorization: 'Bearer test' } }))
   assert.equal(response.status, 200)
   const usage = await response.json()
-  assert.deepEqual(usage.text, { used: 42, reserved: 400, limit: 100000 })
+  assert.deepEqual(usage.text, { used: 42, reserved: 400, limit: 1000000 })
   assert.deepEqual(usage.requests, { used: 3, limit: 10 })
   assert.deepEqual(usage.speechRequests, { used: 2, limit: 60 })
   assert.deepEqual(usage.speech, { used: 0, reserved: 0, limit: 30000 })
