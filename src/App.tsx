@@ -513,6 +513,14 @@ function App() {
   const dueWords = dueReviewWords(entries, reviewSchedules, currentTime.toISOString())
   const dueGroups = groupDueReviewWords(entries, reviewSchedules, currentTime.toISOString())
   const dailyWord = entries.find((entry) => entry.id === dailyWordIds[0])
+  const dailyTerm = dailyWord?.term
+
+  useEffect(() => {
+    if (!dailyTerm || !Reflect.has(window, 'speechSynthesis')) return
+    pronounce(dailyTerm)
+    return () => window.speechSynthesis.cancel()
+  }, [dailyTerm])
+
   const dailyCard = dailyWord && dailyCards[dailyWord.id]
   const dailySchedule = reviewSchedules.find((schedule) => schedule.wordId === dailyWord?.id)
   const overdueDays = dailySchedule?.intervalDays ? Math.max(0, Math.floor((currentTime.getTime() - Date.parse(dailySchedule.dueAt)) / 86400000)) : 0

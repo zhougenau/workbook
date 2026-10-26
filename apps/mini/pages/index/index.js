@@ -307,7 +307,7 @@ Page({
     this.dueCardRun += 1
     const due = dueReviewWords(loadEntries(), loadReviewSchedules(), new Date().toISOString())
     const dailyWordIds = due.slice(0, 20).map((word) => word.id)
-    this.setData({ dailyWordIds, dailyWord: due[0] || null, dailyRevealed: false, dailyCardMode: false, dailyCardLoading: false, dailyCardMessage: '' })
+    this.setData({ dailyWordIds, dailyWord: due[0] || null, dailyRevealed: false, dailyCardMode: false, dailyCardLoading: false, dailyCardMessage: '' }, () => this.autoplayDailyWord())
   },
 
   async startDueCards(event) {
@@ -326,7 +326,10 @@ Page({
       dailyWordIds: words.map((word) => word.id), dailyWord: words[0], dailyRevealed: false,
       dailyCardMode: true, dailyCards: cards, dailyCard: cards[words[0].id] || null,
       dailyCardMessage: '', dailyCardLoading: false,
-    }, () => this.refreshEntries())
+    }, () => {
+      this.refreshEntries()
+      this.autoplayDailyWord()
+    })
     const missing = words.filter((word) => !cards[word.id] && word.syncStatus === 'synced')
     if (!loadSession() || !missing.length) return
     this.setData({ dailyCardLoading: true })
@@ -351,6 +354,7 @@ Page({
 
   closeDailyReview() {
     this.dueCardRun += 1
+    if (this.data.speechSource === 'daily') this.stopFlashcardSpeech()
     this.setData({ dailyWordIds: [], dailyWord: null, dailyRevealed: false, dailyCardMode: false, dailyCardLoading: false })
   },
 
@@ -371,7 +375,7 @@ Page({
       return
     }
     const dailyWordIds = this.data.dailyWordIds.slice(1)
-    this.setData({ dailyWordIds, dailyWord: this.data.entries.find((entry) => entry.id === dailyWordIds[0]) || null, dailyCard: this.data.dailyCards[dailyWordIds[0]] || null, dailyRevealed: false })
+    this.setData({ dailyWordIds, dailyWord: this.data.entries.find((entry) => entry.id === dailyWordIds[0]) || null, dailyCard: this.data.dailyCards[dailyWordIds[0]] || null, dailyRevealed: false }, () => this.autoplayDailyWord())
     this.refreshEntries()
     this.queueSync()
   },
@@ -853,6 +857,11 @@ Page({
       }
     }
     for (let worker = 0; worker < Math.min(2, cards.length); worker += 1) prefetch()
+  },
+
+  autoplayDailyWord() {
+    if (this.data.speechSource === 'daily') this.stopFlashcardSpeech()
+    if (this.data.dailyWord) void this.speakDailyWord()
   },
 
   async speakDailyWord() {
