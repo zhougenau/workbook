@@ -305,9 +305,13 @@ Page({
 
   startDailyReview() {
     this.dueCardRun += 1
+    this.cancelSpeechPrefetch()
     const due = dueReviewWords(loadEntries(), loadReviewSchedules(), new Date().toISOString())
     const dailyWordIds = due.slice(0, 20).map((word) => word.id)
-    this.setData({ dailyWordIds, dailyWord: due[0] || null, dailyRevealed: false, dailyCardMode: false, dailyCardLoading: false, dailyCardMessage: '' }, () => this.autoplayDailyWord())
+    this.setData({ dailyWordIds, dailyWord: due[0] || null, dailyRevealed: false, dailyCardMode: false, dailyCardLoading: false, dailyCardMessage: '' }, () => {
+      this.autoplayDailyWord()
+      this.prefetchSpeechTexts(due.slice(1, 20).map((word) => word.term))
+    })
   },
 
   async startDueCards(event) {
@@ -315,6 +319,7 @@ Page({
     const words = groupDueReviewWords(loadEntries(), loadReviewSchedules(), new Date().toISOString())[group]?.slice(0, 10) || []
     if (!words.length) return
     const run = ++this.dueCardRun
+    this.cancelSpeechPrefetch()
     const cards = {}
     for (const word of words) {
       try {
@@ -329,6 +334,7 @@ Page({
     }, () => {
       this.refreshEntries()
       this.autoplayDailyWord()
+      this.prefetchSpeechTexts(words.slice(1).map((word) => word.term))
     })
     const missing = words.filter((word) => !cards[word.id] && word.syncStatus === 'synced')
     if (!loadSession() || !missing.length) return
@@ -354,6 +360,7 @@ Page({
 
   closeDailyReview() {
     this.dueCardRun += 1
+    this.cancelSpeechPrefetch()
     if (this.data.speechSource === 'daily') this.stopFlashcardSpeech()
     this.setData({ dailyWordIds: [], dailyWord: null, dailyRevealed: false, dailyCardMode: false, dailyCardLoading: false })
   },
@@ -837,15 +844,19 @@ Page({
   },
 
   prefetchFlashcardSpeech(cards) {
+    this.prefetchSpeechTexts(cards.map((card) => `${card.word}. ${card.usage}`))
+  },
+
+  prefetchSpeechTexts(texts) {
     const generation = this.speechPrefetchGeneration
     let nextIndex = 0
     const prefetch = async () => {
-      while (generation === this.speechPrefetchGeneration && nextIndex < cards.length) {
-        const card = cards[nextIndex++]
+      while (generation === this.speechPrefetchGeneration && nextIndex < texts.length) {
+        const text = texts[nextIndex++]
         let legacyRetries = 0
         while (generation === this.speechPrefetchGeneration) {
           try {
-            await this.getSpeechAudio(`${card.word}. ${card.usage}`)
+            await this.getSpeechAudio(text)
             break
           } catch (error) {
             if (error.statusCode !== 429 || error.reason === 'daily') break
@@ -856,12 +867,13 @@ Page({
         }
       }
     }
-    for (let worker = 0; worker < Math.min(2, cards.length); worker += 1) prefetch()
+    for (let worker = 0; worker < Math.min(2, texts.length); worker += 1) prefetch()
   },
 
   autoplayDailyWord() {
     if (this.data.speechSource === 'daily') this.stopFlashcardSpeech()
     if (this.data.dailyWord) void this.speakDailyWord()
+    else this.cancelSpeechPrefetch()
   },
 
   async speakDailyWord() {
