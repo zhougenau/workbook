@@ -349,7 +349,10 @@
           <text>{{currentQuestion.feedbackTitle}}</text>
           <text>{{currentQuestion.explanation}}</text>
         </view>
-        <button wx:if="{{currentQuestion.answered}}" class="quiz-next" bindtap="nextReviewQuestion">{{quizCurrentIndex + 1 === quiz.questions.length ? '查看成绩' : '下一题 →'}}</button>
+        <view class="quiz-navigation">
+          <button class="quiz-next quiz-previous" bindtap="previousReviewQuestion" disabled="{{quizCurrentIndex === 0}}">← 上一题</button>
+          <button class="quiz-next" bindtap="nextReviewQuestion" disabled="{{!currentQuestion.answered}}">{{quizCurrentIndex + 1 === quiz.questions.length ? '查看成绩' : '下一题 →'}}</button>
+        </view>
       </view>
       <view wx:if="{{quizComplete}}" class="quiz-complete">
         <text>本轮复习完成</text>

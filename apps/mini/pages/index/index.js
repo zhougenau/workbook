@@ -974,7 +974,7 @@ Page({
         answered: true,
         answerCorrect: optionIndex === question.correctIndex,
         feedbackTitle: optionIndex === question.correctIndex
-          ? '回答正确 · 2 秒后自动进入下一题'
+          ? '回答正确'
           : `正确答案：${question.options[question.correctIndex]}`,
         selectedIndex: optionIndex,
         optionItems: question.optionItems.map((option) => ({
@@ -1000,6 +1000,20 @@ Page({
         this.nextReviewQuestion(nextAnswers)
       }, 2000)
     }
+  },
+
+  previousReviewQuestion() {
+    if (this.advanceTimer) {
+      clearTimeout(this.advanceTimer)
+      this.advanceTimer = null
+    }
+    const quiz = this.data.quiz
+    if (!quiz || this.data.quizComplete || this.data.quizCurrentIndex <= 0) return
+    const previousIndex = this.data.quizCurrentIndex - 1
+    this.setData({
+      quizCurrentIndex: previousIndex,
+      currentQuestion: quiz.questions[previousIndex],
+    })
   },
 
   nextReviewQuestion(input = this.data.quizAnswers) {

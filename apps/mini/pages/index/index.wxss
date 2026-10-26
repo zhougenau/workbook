@@ -1038,6 +1038,20 @@
   background: #5f2116;
 }
 
+.quiz-navigation {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16rpx;
+}
+
+.quiz-navigation .quiz-previous {
+  background: #e7e3db;
+}
+
+.quiz-navigation button[disabled] {
+  opacity: .35;
+}
+
 .quiz-next {
   box-sizing: border-box;
   width: 100%;

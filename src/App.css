@@ -464,7 +464,7 @@
 .review-explanation { margin-top: 16px; padding: 14px 16px; color: var(--ink); background: var(--paper); border-left: 4px solid var(--lime); }
 .review-explanation.wrong { border-left-color: var(--coral); }
 .review-explanation p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
-.review-question-actions, .review-result-actions { display: flex; margin-top: 20px; align-items: center; justify-content: space-between; gap: 10px; }
+.review-question-actions, .review-result-actions { display: flex; flex-wrap: wrap; margin-top: 20px; align-items: center; justify-content: space-between; gap: 10px; }
 .review-question-actions button, .review-result-actions button { display: inline-flex; min-height: 40px; padding: 0 14px; align-items: center; justify-content: center; gap: 7px; color: var(--paper); background: transparent; border: 1px solid #5e5a54; cursor: pointer; }
 .review-question-actions .review-next, .review-result-actions button:last-child { color: var(--ink); background: var(--lime); border-color: var(--lime); }
 .review-result-actions .reinforce-review-button { color: var(--ink); background: var(--coral); border-color: var(--coral); font-weight: 700; }

@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { AiProvider } from '@wordbook/core'
-import { ArrowRight, BrainCircuit, Check, LoaderCircle, RotateCcw, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BrainCircuit, Check, LoaderCircle, RotateCcw, X } from 'lucide-react'
 import { calculateMasteryChanges, generateReview, type MasteryChange, type ReviewDifficulty, type ReviewMode, type ReviewQuiz } from './review'
 import type { VocabularyEntry } from './storage'
 
@@ -185,6 +185,14 @@ export function ReviewPanel({ provider, selectedWords, prepareWords, applyMaster
     if (changed.length) void saveMasteryChanges(changed)
   }
 
+  const goToPreviousQuestion = () => {
+    if (advanceTimer.current) {
+      clearTimeout(advanceTimer.current)
+      advanceTimer.current = null
+    }
+    setCurrentIndex((index) => Math.max(0, index - 1))
+  }
+
   const goToNextQuestion = () => {
     if (advanceTimer.current) {
       clearTimeout(advanceTimer.current)
@@ -296,6 +304,9 @@ export function ReviewPanel({ provider, selectedWords, prepareWords, applyMaster
       )}
       <div className="review-question-actions">
         <button type="button" onClick={onClose}>退出复习</button>
+        <button type="button" disabled={currentIndex === 0} onClick={goToPreviousQuestion}>
+          <ArrowLeft size={17} />上一题
+        </button>
         <button
           className="review-next"
           type="button"
