@@ -68,7 +68,11 @@
       <button bindtap="startDailyReview" disabled="{{!dueReviewCount}}">开始复习</button>
     </view>
     <view class="due-card-groups" aria-label="到期卡片分组">
-      <button wx:for="{{dueCardGroups}}" wx:key="key" data-group="{{item.key}}" bindtap="startDueCards" disabled="{{!item.count}}">{{item.label}} {{item.count}}</button>
+      <button wx:for="{{dueCardGroups}}" wx:key="key" data-group="{{item.key}}" bindtap="startDueCards" disabled="{{!item.count}}" aria-label="{{item.label}}，{{item.count}} 个待复习">
+        <text class="due-card-icon" aria-hidden="true">{{item.icon}}</text>
+        <text class="due-card-label">{{item.shortLabel}}</text>
+        <text class="due-card-count" aria-hidden="true">{{item.count}}</text>
+      </button>
     </view>
     <view wx:if="{{dailyWord}}" class="daily-review-session">
       <text>{{dailyCardMode ? '到期卡片' : '今日复习'}} · 本轮剩余 {{dailyWordIds.length}} 词{{dailyCardMode && dailyOverdueDays ? ' · 逾期 ' + dailyOverdueDays + ' 天' : ''}}{{dailyCardLoading ? ' · 正在准备卡片' : ''}}</text>

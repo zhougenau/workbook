@@ -43,6 +43,8 @@ const { destroySpeech, playSpeech, setSpeechRate, stopSpeech } = require('../../
 
 const masteryLabels = ['未掌握', '刚认识', '有印象', '基本理解', '较熟练', '已掌握']
 const dueGroupLabels = { new: '新词', retry: '待巩固', day1: '1 天间隔', day3: '3 天间隔', day7: '7 天间隔', other: '其他到期' }
+const dueGroupIcons = { new: '＋', retry: '↻', day1: '◷', day3: '◷', day7: '◷', other: '⋯' }
+const dueGroupShortLabels = { new: '新词', retry: '巩固', day1: '1天', day3: '3天', day7: '7天', other: '其他' }
 const dueCardKey = (id) => `wordbook:due-card:${id}`
 const masteryFilterLabels = ['全部程度', '学习中 · 1–4', ...masteryLabels.map((label, index) => `${index} · ${label}`)]
 const sortLabels = ['最近添加', '最早添加', '字母顺序', '掌握度优先']
@@ -88,8 +90,8 @@ Page({
     dailyCardLoading: false,
     dailyCardMessage: '',
     dailyOverdueDays: 0,
-    appVersion: '1.9.0',
-    appUpdatedAt: '2026-10-19',
+    appVersion: '1.9.1',
+    appUpdatedAt: '2026-10-26',
     visibleEntries: [],
     search: '',
     masteryFilter: 'all',
@@ -287,7 +289,7 @@ Page({
     this.setData({
       entries,
       dueReviewCount,
-      dueCardGroups: Object.entries(dueGroupLabels).map(([key, label]) => ({ key, label, count: groups[key].length })),
+      dueCardGroups: Object.entries(dueGroupLabels).map(([key, label]) => ({ key, label, icon: dueGroupIcons[key], shortLabel: dueGroupShortLabels[key], count: groups[key].length })),
       dailyWord,
       dailyCard: dailyWord ? this.data.dailyCards[dailyWord.id] || null : null,
       dailyOverdueDays,

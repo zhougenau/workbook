@@ -6,8 +6,11 @@
 }
 
 .daily-review { padding: 24rpx 0; border-bottom: 1rpx solid #c9c4b8; }
-.due-card-groups { display: flex; margin-top: 16rpx; flex-wrap: wrap; gap: 10rpx; }
-.due-card-groups button { min-width: 0; height: 54rpx; margin: 0; padding: 0 16rpx; color: #fffaf0; background: #315b47; border-radius: 0; font-size: 22rpx; line-height: 54rpx; }
+.due-card-groups { display: grid; margin-top: 16rpx; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10rpx; }
+.due-card-groups button { box-sizing: border-box; display: flex; width: 100%; min-width: 0; height: 68rpx; margin: 0; padding: 0 10rpx; align-items: center; justify-content: center; gap: 8rpx; color: #fffaf0; background: #315b47; border-radius: 0; font-size: 22rpx; line-height: 1; white-space: nowrap; }
+.due-card-icon { flex: 0 0 auto; font-size: 28rpx; }
+.due-card-label { min-width: 0; }
+.due-card-count { flex: 0 0 auto; font-size: 19rpx; opacity: .8; }
 .due-card-groups button[disabled] { opacity: .4; }
 .due-card-detail { display: flex; flex-direction: column; gap: 8rpx; font-size: 25rpx; line-height: 1.5; }
 .daily-card-message { color: #a43c2d; font-size: 22rpx; }
