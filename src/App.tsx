@@ -1058,7 +1058,10 @@ function App() {
           {dailyWord && (
             <div className="daily-review-session">
               <small>{dailyCardMode ? '到期卡片' : '今日复习'} · 本轮剩余 {dailyWordIds.length} 词{dailyCardMode && overdueDays > 0 ? ` · 逾期 ${overdueDays} 天` : ''}{dailyCardMode && dailyCardLoading ? ' · 正在准备卡片' : ''}</small>
-              <strong>{dailyWord.term}</strong>
+              <div className="daily-review-word">
+                <strong>{dailyWord.term}</strong>
+                <button type="button" onClick={() => pronounce(dailyWord.term)} title={`朗读 ${dailyWord.term}`} aria-label={`朗读 ${dailyWord.term}`}><Volume2 size={18} /></button>
+              </div>
               {dailyCardMode && dailyCardMessage && <small role="status">{dailyCardMessage}</small>}
               {dailyRevealed ? (
                 <>

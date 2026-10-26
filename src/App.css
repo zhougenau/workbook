@@ -260,7 +260,9 @@
 .daily-review button { display: inline-flex; min-height: 38px; padding: 6px 12px; align-items: center; gap: 6px; color: var(--paper); background: var(--ink); border: 1px solid var(--ink); cursor: pointer; }
 .daily-review button:disabled { opacity: .4; cursor: not-allowed; }
 .daily-review-session { position: relative; display: grid; margin-top: 16px; padding: 22px 50px 22px 22px; gap: 14px; background: #e9ece0; border-left: 3px solid var(--coral-dark); }
-.daily-review-session > strong { overflow-wrap: anywhere; font-family: var(--display); font-size: 28px; }
+.daily-review-word { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.daily-review-word > strong { min-width: 0; overflow-wrap: anywhere; font-family: var(--display); font-size: 28px; }
+.daily-review .daily-review-word button { flex: 0 0 38px; width: 38px; height: 38px; padding: 0; justify-content: center; }
 .daily-review-session > p { margin: 0; line-height: 1.6; }
 .daily-review-session > p small { display: block; color: var(--muted); }
 .daily-review-actions { display: flex; flex-wrap: wrap; gap: 10px; }

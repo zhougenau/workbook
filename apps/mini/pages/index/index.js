@@ -855,6 +855,13 @@ Page({
     for (let worker = 0; worker < Math.min(2, cards.length); worker += 1) prefetch()
   },
 
+  async speakDailyWord() {
+    const word = this.data.dailyWord
+    if (!word) return
+    this.stopFlashcardAutoplay()
+    await this.speakText(word.term, 'daily', word.id)
+  },
+
   async speakWord(event) {
     this.stopFlashcardAutoplay()
     const entry = this.data.entries.find((item) => item.id === event.currentTarget.dataset.id)

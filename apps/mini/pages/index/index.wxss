@@ -18,7 +18,9 @@
 .daily-review-heading button, .daily-review-session button { margin: 0; padding: 0 20rpx; color: #fffaf0; background: #315b47; border-radius: 0; font-size: 23rpx; }
 .daily-review-heading button[disabled] { opacity: .45; }
 .daily-review-session { display: flex; padding: 24rpx 0; flex-direction: column; gap: 14rpx; }
-.daily-review-term { font-family: "STSong", "Songti SC", serif; font-size: 34rpx; font-weight: 700; overflow-wrap: anywhere; }
+.daily-review-word { display: flex; align-items: center; gap: 16rpx; min-width: 0; }
+.daily-review-word .word-speech-button { flex-shrink: 0; margin: 0; }
+.daily-review-term { min-width: 0; font-family: "STSong", "Songti SC", serif; font-size: 34rpx; font-weight: 700; overflow-wrap: anywhere; }
 .daily-review-meaning { display: block; padding: 6rpx 0; font-size: 26rpx; }
 .daily-review-preview-actions, .daily-review-actions { display: grid; width: 100%; gap: 12rpx; }
 .daily-review-preview-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
