@@ -6,6 +6,11 @@
 }
 
 .daily-review { padding: 24rpx 0; border-bottom: 1rpx solid #c9c4b8; }
+.due-card-groups { display: flex; margin-top: 16rpx; flex-wrap: wrap; gap: 10rpx; }
+.due-card-groups button { min-width: 0; height: 54rpx; margin: 0; padding: 0 16rpx; color: #fffaf0; background: #315b47; border-radius: 0; font-size: 22rpx; line-height: 54rpx; }
+.due-card-groups button[disabled] { opacity: .4; }
+.due-card-detail { display: flex; flex-direction: column; gap: 8rpx; font-size: 25rpx; line-height: 1.5; }
+.daily-card-message { color: #a43c2d; font-size: 22rpx; }
 .daily-review-heading { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; color: #20231f; font-size: 28rpx; font-weight: 700; }
 .daily-review-heading button, .daily-review-session button { margin: 0; padding: 0 20rpx; color: #fffaf0; background: #315b47; border-radius: 0; font-size: 23rpx; }
 .daily-review-heading button[disabled] { opacity: .45; }

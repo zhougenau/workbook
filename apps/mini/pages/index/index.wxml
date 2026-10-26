@@ -67,22 +67,30 @@
       <text>今日待复习 {{dueReviewCount}}</text>
       <button bindtap="startDailyReview" disabled="{{!dueReviewCount}}">开始复习</button>
     </view>
+    <view class="due-card-groups" aria-label="到期卡片分组">
+      <button wx:for="{{dueCardGroups}}" wx:key="key" data-group="{{item.key}}" bindtap="startDueCards" disabled="{{!item.count}}">{{item.label}} {{item.count}}</button>
+    </view>
     <view wx:if="{{dailyWord}}" class="daily-review-session">
-      <text>本轮剩余 {{dailyWordIds.length}} 词</text>
+      <text>{{dailyCardMode ? '到期卡片' : '今日复习'}} · 本轮剩余 {{dailyWordIds.length}} 词{{dailyCardMode && dailyOverdueDays ? ' · 逾期 ' + dailyOverdueDays + ' 天' : ''}}{{dailyCardLoading ? ' · 正在准备卡片' : ''}}</text>
       <text class="daily-review-term">{{dailyWord.term}}</text>
       <view wx:if="{{!dailyRevealed}}" class="daily-review-preview-actions">
-        <button bindtap="revealDailyWord">揭晓释义</button>
+        <button bindtap="revealDailyWord">揭晓答案</button>
         <button class="daily-review-exit" bindtap="closeDailyReview">退出</button>
       </view>
       <view wx:else>
-        <text class="daily-review-meaning">{{dailyWord.meaning || '暂无释义'}}</text>
+        <text class="daily-review-meaning">{{dailyWord.meaning || (dailyCardMode && dailyCard && dailyCard.meaning) || '暂无释义'}}</text>
         <text wx:if="{{dailyWord.note}}" class="daily-review-meaning">{{dailyWord.note}}</text>
+        <view wx:if="{{dailyCardMode && dailyCard}}" class="due-card-detail">
+          <text>{{dailyCard.usage}}</text>
+          <text>{{dailyCard.memoryTip}}</text>
+        </view>
         <view class="daily-review-actions">
           <button data-remembered="false" bindtap="rateDailyWord">没记住</button>
           <button data-remembered="true" bindtap="rateDailyWord">记住了</button>
           <button class="daily-review-exit" bindtap="closeDailyReview">退出</button>
         </view>
       </view>
+      <text wx:if="{{dailyCardMessage}}" class="daily-card-message">{{dailyCardMessage}}</text>
     </view>
   </view>
 

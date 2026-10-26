@@ -24,6 +24,9 @@ const {
   analyzeVocabularyText,
   calculateMasteryChanges,
   dueReviewWords,
+  groupDueReviewWords,
+  cacheFlashcard,
+  readCachedFlashcard,
   scheduleReview,
   clampFlashcardIndex,
   filterAndSortVocabularyEntries,
@@ -39,6 +42,8 @@ const { createEntry, loadAllEntries, loadEntries, loadReviewSchedules, saveEntri
 const { destroySpeech, playSpeech, setSpeechRate, stopSpeech } = require('../../utils/speech')
 
 const masteryLabels = ['未掌握', '刚认识', '有印象', '基本理解', '较熟练', '已掌握']
+const dueGroupLabels = { new: '新词', retry: '待巩固', day1: '1 天间隔', day3: '3 天间隔', day7: '7 天间隔', other: '其他到期' }
+const dueCardKey = (id) => `wordbook:due-card:${id}`
 const masteryFilterLabels = ['全部程度', '学习中 · 1–4', ...masteryLabels.map((label, index) => `${index} · ${label}`)]
 const sortLabels = ['最近添加', '最早添加', '字母顺序', '掌握度优先']
 const speechRates = [0.8, 1, 1.25]
@@ -76,6 +81,13 @@ Page({
     dailyWordIds: [],
     dailyWord: null,
     dailyRevealed: false,
+    dailyCardMode: false,
+    dueCardGroups: [],
+    dailyCards: {},
+    dailyCard: null,
+    dailyCardLoading: false,
+    dailyCardMessage: '',
+    dailyOverdueDays: 0,
     appVersion: '1.9.0',
     appUpdatedAt: '2026-10-19',
     visibleEntries: [],
@@ -166,6 +178,7 @@ Page({
   },
 
   onLoad() {
+    this.dueCardRun = 0
     this.chatRequestId = 0
     this.completionRequestId = 0
     this.completionEdits = { meaning: 0, note: 0 }
@@ -258,8 +271,13 @@ Page({
 
   refreshEntries() {
     const entries = decorateEntries(loadEntries(), this.data.aiSelectedIds)
-    const dueReviewCount = dueReviewWords(entries, loadReviewSchedules(), new Date().toISOString()).length
+    const schedules = loadReviewSchedules()
+    const now = new Date().toISOString()
+    const dueReviewCount = dueReviewWords(entries, schedules, now).length
+    const groups = groupDueReviewWords(entries, schedules, now)
     const dailyWord = entries.find((entry) => entry.id === this.data.dailyWordIds[0]) || null
+    const dailySchedule = schedules.find((schedule) => schedule.wordId === dailyWord?.id)
+    const dailyOverdueDays = dailySchedule?.intervalDays ? Math.max(0, Math.floor((Date.now() - Date.parse(dailySchedule.dueAt)) / 86400000)) : 0
     const filteredEntries = filterAndSortVocabularyEntries(entries, {
       search: this.data.search,
       masteryFilter: this.data.masteryFilter,
@@ -269,7 +287,10 @@ Page({
     this.setData({
       entries,
       dueReviewCount,
+      dueCardGroups: Object.entries(dueGroupLabels).map(([key, label]) => ({ key, label, count: groups[key].length })),
       dailyWord,
+      dailyCard: dailyWord ? this.data.dailyCards[dailyWord.id] || null : null,
+      dailyOverdueDays,
       visibleEntries: pagination.items,
       pageSelectionComplete: pagination.items.length > 0 && pagination.items.slice(0, 10).every((entry) => entry.aiSelected),
       currentPage: pagination.currentPage,
@@ -281,13 +302,54 @@ Page({
   },
 
   startDailyReview() {
+    this.dueCardRun += 1
     const due = dueReviewWords(loadEntries(), loadReviewSchedules(), new Date().toISOString())
     const dailyWordIds = due.slice(0, 20).map((word) => word.id)
-    this.setData({ dailyWordIds, dailyWord: due[0] || null, dailyRevealed: false })
+    this.setData({ dailyWordIds, dailyWord: due[0] || null, dailyRevealed: false, dailyCardMode: false, dailyCardLoading: false, dailyCardMessage: '' })
+  },
+
+  async startDueCards(event) {
+    const group = event.currentTarget.dataset.group
+    const words = groupDueReviewWords(loadEntries(), loadReviewSchedules(), new Date().toISOString())[group]?.slice(0, 10) || []
+    if (!words.length) return
+    const run = ++this.dueCardRun
+    const cards = {}
+    for (const word of words) {
+      try {
+        const card = readCachedFlashcard(word, wx.getStorageSync(dueCardKey(word.id)))
+        if (card) cards[word.id] = card
+      } catch { /* Local storage may be unavailable. */ }
+    }
+    this.setData({
+      dailyWordIds: words.map((word) => word.id), dailyWord: words[0], dailyRevealed: false,
+      dailyCardMode: true, dailyCards: cards, dailyCard: cards[words[0].id] || null,
+      dailyCardMessage: '', dailyCardLoading: false,
+    }, () => this.refreshEntries())
+    const missing = words.filter((word) => !cards[word.id] && word.syncStatus === 'synced')
+    if (!loadSession() || !missing.length) return
+    this.setData({ dailyCardLoading: true })
+    try {
+      const result = await generateFlashcards(missing.map((word) => word.id), this.data.aiProvider)
+      for (const card of result.cards) {
+        const word = missing.find((item) => item.id === card.wordId)
+        if (!word) continue
+        cards[word.id] = card
+        try { wx.setStorageSync(dueCardKey(word.id), cacheFlashcard(word, card)) } catch { /* Keep the card in memory. */ }
+      }
+      if (this.dueCardRun === run) {
+        const dailyWord = this.data.dailyWord
+        this.setData({ dailyCards: cards, dailyCard: dailyWord ? cards[dailyWord.id] || null : null, dailyCardMessage: `本次生成消耗 ${result.tokenUsage.totalTokens} Tokens` })
+      }
+    } catch {
+      if (this.dueCardRun === run) this.setData({ dailyCardMessage: 'AI 卡片暂不可用，可继续用词条复习' })
+    } finally {
+      if (this.dueCardRun === run) this.setData({ dailyCardLoading: false })
+    }
   },
 
   closeDailyReview() {
-    this.setData({ dailyWordIds: [], dailyWord: null, dailyRevealed: false })
+    this.dueCardRun += 1
+    this.setData({ dailyWordIds: [], dailyWord: null, dailyRevealed: false, dailyCardMode: false, dailyCardLoading: false })
   },
 
   revealDailyWord() {
@@ -307,7 +369,7 @@ Page({
       return
     }
     const dailyWordIds = this.data.dailyWordIds.slice(1)
-    this.setData({ dailyWordIds, dailyWord: this.data.entries.find((entry) => entry.id === dailyWordIds[0]) || null, dailyRevealed: false })
+    this.setData({ dailyWordIds, dailyWord: this.data.entries.find((entry) => entry.id === dailyWordIds[0]) || null, dailyCard: this.data.dailyCards[dailyWordIds[0]] || null, dailyRevealed: false })
     this.refreshEntries()
     this.queueSync()
   },

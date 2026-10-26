@@ -159,3 +159,28 @@ test('daily review queues only due words oldest first without changing source or
   assert.deepEqual(words.map((word) => word.id), ['b', 'a', 'c'])
   assert.deepEqual(core.dueReviewWords([entry({ id: 'b' })], [{ wordId: 'b', dueAt: '2026-10-23T09:00:00+00:00' }], '2026-10-23T09:00:00.000Z').map((word) => word.id), ['b'])
 })
+
+test('groups overdue words by their scheduled interval, not their age', () => {
+  const now = '2026-10-26T10:00:00.000Z'
+  const words = ['new', 'retry', 'one', 'three', 'seven', 'other', 'future', 'deleted'].map((id) =>
+    entry({ id, createdAt: '2026-10-01T00:00:00.000Z', deletedAt: id === 'deleted' ? now : null }))
+  const schedules = [
+    { wordId: 'retry', intervalDays: 0 }, { wordId: 'one', intervalDays: 1 },
+    { wordId: 'three', intervalDays: 3 }, { wordId: 'seven', intervalDays: 7 },
+    { wordId: 'other', intervalDays: 14 }, { wordId: 'future', intervalDays: 3, dueAt: '2026-10-27T10:00:00.000Z' },
+  ].map((schedule) => ({ dueAt: '2026-10-20T00:00:00.000Z', ...schedule }))
+  const groups = core.groupDueReviewWords(words, schedules, now)
+  assert.deepEqual(Object.fromEntries(Object.entries(groups).map(([key, items]) => [key, items.map((item) => item.id)])), {
+    new: ['new'], retry: ['retry'], day1: ['one'], day3: ['three'], day7: ['seven'], other: ['other'],
+  })
+})
+
+test('reuses only intact flashcards for the same word revision', () => {
+  const word = entry({ id: 'card-1', term: 'postpone', note: 'example' })
+  const card = { wordId: word.id, word: word.term, meaning: word.meaning, usage: 'We postponed the meeting.', synonyms: [], antonyms: [], memoryTip: '会议延期' }
+  const cached = core.cacheFlashcard(word, card)
+  assert.deepEqual(core.readCachedFlashcard(word, cached), card)
+  assert.equal(core.readCachedFlashcard({ ...word, note: 'edited' }, cached), null)
+  assert.equal(core.readCachedFlashcard(word, { ...cached, card: { ...card, wordId: 'other' } }), null)
+  assert.equal(core.readCachedFlashcard(word, { ...cached, card: { ...card, usage: '' } }), null)
+})

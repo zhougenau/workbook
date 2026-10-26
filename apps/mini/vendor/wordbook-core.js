@@ -43,8 +43,56 @@ function dueReviewWords(words, schedules, now) {
 		return Date.parse(leftDue) - Date.parse(rightDue) || left.id.localeCompare(right.id);
 	});
 }
+function groupDueReviewWords(words, schedules, now) {
+	const groups = {
+		new: [],
+		retry: [],
+		day1: [],
+		day3: [],
+		day7: [],
+		other: []
+	};
+	const byId = new Map(schedules.map((schedule) => [schedule.wordId, schedule]));
+	for (const word of dueReviewWords(words, schedules, now)) {
+		const schedule = byId.get(word.id);
+		groups[!schedule ? "new" : schedule.intervalDays === 0 ? "retry" : schedule.intervalDays === 1 ? "day1" : schedule.intervalDays === 3 ? "day3" : schedule.intervalDays === 7 ? "day7" : "other"].push(word);
+	}
+	return groups;
+}
 //#endregion
 //#region src/flashcards.ts
+function cacheVersion(word) {
+	return JSON.stringify([
+		word.term,
+		word.meaning,
+		word.note,
+		word.updatedAt
+	]);
+}
+function cacheFlashcard(word, card) {
+	return {
+		version: cacheVersion(word),
+		card
+	};
+}
+function readCachedFlashcard(word, value) {
+	if (!value || typeof value !== "object") return null;
+	const cached = value;
+	if (cached.version !== cacheVersion(word)) return null;
+	try {
+		const parsed = parseGeneratedFlashcards({
+			cards: [cached.card],
+			tokenUsage: {
+				promptTokens: 0,
+				completionTokens: 0,
+				totalTokens: 0
+			}
+		});
+		return parsed.cards[0].wordId === word.id && parsed.cards[0].word === word.term ? parsed.cards[0] : null;
+	} catch {
+		return null;
+	}
+}
 function parseGeneratedFlashcards(value) {
 	if (!value || typeof value !== "object") throw new Error("AI 返回了无法识别的卡片格式");
 	const result = value;
@@ -350,11 +398,13 @@ exports.WORD_CHAT_SUGGESTIONS = WORD_CHAT_SUGGESTIONS;
 exports.analyzeVocabularyText = analyzeVocabularyText;
 exports.appendWordChatQuestion = appendWordChatQuestion;
 exports.appendWordChatReply = appendWordChatReply;
+exports.cacheFlashcard = cacheFlashcard;
 exports.calculateMasteryChanges = calculateMasteryChanges;
 exports.clampFlashcardIndex = clampFlashcardIndex;
 exports.clampMastery = clampMastery;
 exports.dueReviewWords = dueReviewWords;
 exports.filterAndSortVocabularyEntries = filterAndSortVocabularyEntries;
+exports.groupDueReviewWords = groupDueReviewWords;
 exports.isAiProvider = isAiProvider;
 exports.isLegacyVocabularyEntry = isLegacyVocabularyEntry;
 exports.isValidTimestamp = isValidTimestamp;
@@ -366,6 +416,7 @@ exports.normalizeVocabularyEntry = normalizeVocabularyEntry;
 exports.paginate = paginate;
 exports.parseGeneratedFlashcards = parseGeneratedFlashcards;
 exports.parseWordChatResponse = parseWordChatResponse;
+exports.readCachedFlashcard = readCachedFlashcard;
 exports.reconcileDuplicateTerms = reconcileDuplicateTerms;
 exports.scheduleReview = scheduleReview;
 exports.selectFlashcardWords = selectFlashcardWords;

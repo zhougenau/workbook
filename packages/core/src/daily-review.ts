@@ -9,6 +9,8 @@ export type ReviewSchedule = {
   updatedAt: string
 }
 
+export type DueReviewGroup = 'new' | 'retry' | 'day1' | 'day3' | 'day7' | 'other'
+
 const intervals = [1, 3, 7, 14, 30]
 
 export function scheduleReview(wordId: string, previous: ReviewSchedule | undefined, remembered: boolean, now: string): ReviewSchedule {
@@ -26,4 +28,17 @@ export function dueReviewWords<T extends VocabularyEntry>(words: T[], schedules:
       const rightDue = byId.get(right.id)?.dueAt ?? right.createdAt
       return Date.parse(leftDue) - Date.parse(rightDue) || left.id.localeCompare(right.id)
     })
+}
+
+export function groupDueReviewWords<T extends VocabularyEntry>(words: T[], schedules: ReviewSchedule[], now: string): Record<DueReviewGroup, T[]> {
+  const groups: Record<DueReviewGroup, T[]> = { new: [], retry: [], day1: [], day3: [], day7: [], other: [] }
+  const byId = new Map(schedules.map((schedule) => [schedule.wordId, schedule]))
+  for (const word of dueReviewWords(words, schedules, now)) {
+    const schedule = byId.get(word.id)
+    const group: DueReviewGroup = !schedule ? 'new' : schedule.intervalDays === 0 ? 'retry'
+      : schedule.intervalDays === 1 ? 'day1' : schedule.intervalDays === 3 ? 'day3'
+      : schedule.intervalDays === 7 ? 'day7' : 'other'
+    groups[group].push(word)
+  }
+  return groups
 }

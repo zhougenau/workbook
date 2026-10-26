@@ -17,6 +17,28 @@ export interface GeneratedFlashcards {
   }
 }
 
+type CacheWord = { id: string; term: string; meaning: string; note: string; updatedAt: string }
+
+function cacheVersion(word: CacheWord) {
+  return JSON.stringify([word.term, word.meaning, word.note, word.updatedAt])
+}
+
+export function cacheFlashcard(word: CacheWord, card: Flashcard) {
+  return { version: cacheVersion(word), card }
+}
+
+export function readCachedFlashcard(word: CacheWord, value: unknown): Flashcard | null {
+  if (!value || typeof value !== 'object') return null
+  const cached = value as { version?: unknown; card?: unknown }
+  if (cached.version !== cacheVersion(word)) return null
+  try {
+    const parsed = parseGeneratedFlashcards({ cards: [cached.card], tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } })
+    return parsed.cards[0].wordId === word.id && parsed.cards[0].word === word.term ? parsed.cards[0] : null
+  } catch {
+    return null
+  }
+}
+
 export function parseGeneratedFlashcards(value: unknown): GeneratedFlashcards {
   if (!value || typeof value !== 'object') throw new Error('AI 返回了无法识别的卡片格式')
   const result = value as Record<string, unknown>

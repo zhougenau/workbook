@@ -5,8 +5,13 @@ import {
   normalizeAiProvider,
   paginate,
   dueReviewWords,
+  groupDueReviewWords,
+  cacheFlashcard,
+  readCachedFlashcard,
   scheduleReview,
   type AiProvider,
+  type DueReviewGroup,
+  type Flashcard,
   type MasteryFilter,
   type VocabularySort,
 } from '@wordbook/core'
@@ -63,6 +68,7 @@ import { ReviewPanel } from './ReviewPanel'
 import type { MasteryChange } from './review'
 import { PassagePanel } from './PassagePanel'
 import { FlashcardPanel } from './FlashcardPanel'
+import { generateFlashcards } from './flashcards'
 import { WordChatDialog } from './WordChatDialog'
 import { completeWord } from './wordCompletion'
 import { getPaidUsage, notifyPaidUsageChanged, type PaidUsage } from './paidUsage'
@@ -70,6 +76,8 @@ import { createAccountLinkCode, type AccountLinkCode } from './accountLink'
 import './App.css'
 
 const masteryLabels = ['未掌握', '刚认识', '有印象', '基本理解', '较熟练', '已掌握']
+const dueGroupLabels: Record<DueReviewGroup, string> = { new: '新词', retry: '待巩固', day1: '1 天间隔', day3: '3 天间隔', day7: '7 天间隔', other: '其他到期' }
+const dueCardKey = (id: string) => `wordbook:due-card:${id}`
 
 function normalizeTerm(value: string) {
   return value.trim().toLocaleLowerCase()
@@ -147,6 +155,11 @@ function App() {
   const [dailyWordIds, setDailyWordIds] = useState<string[]>([])
   const [dailyRevealed, setDailyRevealed] = useState(false)
   const [dailyError, setDailyError] = useState('')
+  const [dailyCardMode, setDailyCardMode] = useState(false)
+  const [dailyCards, setDailyCards] = useState<Record<string, Flashcard>>({})
+  const [dailyCardLoading, setDailyCardLoading] = useState(false)
+  const [dailyCardMessage, setDailyCardMessage] = useState('')
+  const dailyCardRun = useRef(0)
   const [user, setUser] = useState<User | null>(null)
   const [paidUsage, setPaidUsage] = useState<PaidUsage | null>(null)
   const [paidUsageStatus, setPaidUsageStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
@@ -433,11 +446,13 @@ function App() {
     void start()
     const authSubscription = supabase?.auth.onAuthStateChange((_event, session) => {
       if (!active) return
+      dailyCardRun.current += 1
       setPaidUsage(null)
       setPaidUsageStatus('idle')
       setUser(session?.user ?? null)
       setReviewSchedules([])
       setDailyWordIds([])
+      setDailyCardLoading(false)
       void loadEntries(session?.user.id ?? null).then(setEntries)
       void loadReviewSchedules(session?.user.id ?? null).then(setReviewSchedules)
       if (session?.user) void syncFromEffect(session.user)
@@ -496,7 +511,62 @@ function App() {
   }
 
   const dueWords = dueReviewWords(entries, reviewSchedules, currentTime.toISOString())
+  const dueGroups = groupDueReviewWords(entries, reviewSchedules, currentTime.toISOString())
   const dailyWord = entries.find((entry) => entry.id === dailyWordIds[0])
+  const dailyCard = dailyWord && dailyCards[dailyWord.id]
+  const dailySchedule = reviewSchedules.find((schedule) => schedule.wordId === dailyWord?.id)
+  const overdueDays = dailySchedule?.intervalDays ? Math.max(0, Math.floor((currentTime.getTime() - Date.parse(dailySchedule.dueAt)) / 86400000)) : 0
+
+  const startDueCards = async (group: DueReviewGroup) => {
+    const words = dueGroups[group].slice(0, 10)
+    if (!words.length) return
+    const run = ++dailyCardRun.current
+    setDailyWordIds(words.map((word) => word.id))
+    setDailyCardMode(true)
+    setDailyRevealed(false)
+    setDailyError('')
+    setDailyCardMessage('')
+    const cached: Record<string, Flashcard> = {}
+    for (const word of words) {
+      try {
+        const card = readCachedFlashcard(word, JSON.parse(window.localStorage.getItem(dueCardKey(word.id)) || 'null'))
+        if (card) cached[word.id] = card
+      } catch { /* Local storage may be unavailable. */ }
+    }
+    setDailyCards(cached)
+    if (!user || words.every((word) => cached[word.id])) return
+    setDailyCardLoading(true)
+    try {
+      const idRemap = await prepareReviewWords()
+      if (dailyCardRun.current !== run) return
+      setDailyWordIds((ids) => ids.map((id) => idRemap[id] ?? id))
+      const syncedWords = await loadEntries(user.id)
+      const currentWords = words.map((word) => syncedWords.find((item) => item.id === (idRemap[word.id] ?? word.id))).filter((word): word is VocabularyEntry => Boolean(word))
+      const found = { ...cached }
+      for (const word of currentWords) {
+        try {
+          const card = readCachedFlashcard(word, JSON.parse(window.localStorage.getItem(dueCardKey(word.id)) || 'null'))
+          if (card) found[word.id] = card
+        } catch { /* Local storage may be unavailable. */ }
+      }
+      setDailyCards(found)
+      const missing = currentWords.filter((word) => !found[word.id])
+      if (!missing.length || dailyCardRun.current !== run) return
+      const result = await generateFlashcards(missing.map((word) => word.id), undefined, aiProvider)
+      const generated = Object.fromEntries(result.cards.map((card) => [card.wordId, card])) as Record<string, Flashcard>
+      for (const word of missing) {
+        try { window.localStorage.setItem(dueCardKey(word.id), JSON.stringify(cacheFlashcard(word, generated[word.id]))) } catch { /* Keep the generated card in memory. */ }
+      }
+      if (dailyCardRun.current === run) {
+        setDailyCards((previous) => ({ ...previous, ...generated }))
+        setDailyCardMessage(`本次生成消耗 ${result.tokenUsage.totalTokens} Tokens`)
+      }
+    } catch {
+      if (dailyCardRun.current === run) setDailyCardMessage('AI 卡片暂不可用，可继续用词条复习')
+    } finally {
+      if (dailyCardRun.current === run) setDailyCardLoading(false)
+    }
+  }
 
   const rateDailyWord = async (remembered: boolean) => {
     if (!dailyWord) return
@@ -974,24 +1044,33 @@ function App() {
         <section className="daily-review" aria-labelledby="daily-review-title">
           <div className="daily-review-heading">
             <h2 id="daily-review-title">今日待复习 <span>{dueWords.length}</span></h2>
-            <button type="button" onClick={() => { setDailyWordIds(dueWords.slice(0, 20).map((word) => word.id)); setDailyRevealed(false) }} disabled={!dueWords.length}>
+            <button type="button" onClick={() => { dailyCardRun.current += 1; setDailyCardLoading(false); setDailyCardMode(false); setDailyWordIds(dueWords.slice(0, 20).map((word) => word.id)); setDailyRevealed(false); setDailyError('') }} disabled={!dueWords.length}>
               <RotateCcw size={17} />开始复习
             </button>
           </div>
+          <div className="due-card-groups" aria-label="到期卡片分组">
+            {(Object.keys(dueGroupLabels) as DueReviewGroup[]).map((group) => (
+              <button type="button" key={group} disabled={!dueGroups[group].length} onClick={() => void startDueCards(group)}>
+                {dueGroupLabels[group]} <strong>{dueGroups[group].length}</strong>
+              </button>
+            ))}
+          </div>
           {dailyWord && (
             <div className="daily-review-session">
-              <small>本轮剩余 {dailyWordIds.length} 词</small>
+              <small>{dailyCardMode ? '到期卡片' : '今日复习'} · 本轮剩余 {dailyWordIds.length} 词{dailyCardMode && overdueDays > 0 ? ` · 逾期 ${overdueDays} 天` : ''}{dailyCardMode && dailyCardLoading ? ' · 正在准备卡片' : ''}</small>
               <strong>{dailyWord.term}</strong>
+              {dailyCardMode && dailyCardMessage && <small role="status">{dailyCardMessage}</small>}
               {dailyRevealed ? (
                 <>
-                  <p>{dailyWord.meaning || '暂无释义'}{dailyWord.note && <small>{dailyWord.note}</small>}</p>
+                  <p>{dailyWord.meaning || (dailyCardMode && dailyCard?.meaning) || '暂无释义'}{dailyWord.note && <small>{dailyWord.note}</small>}</p>
+                  {dailyCardMode && dailyCard && <div className="due-card-detail"><p lang="en">{dailyCard.usage}</p><small>{dailyCard.memoryTip}</small></div>}
                   <div className="daily-review-actions">
                     <button type="button" onClick={() => void rateDailyWord(false)}>没记住</button>
                     <button type="button" onClick={() => void rateDailyWord(true)}>记住了</button>
                   </div>
                 </>
-              ) : <button type="button" onClick={() => setDailyRevealed(true)}>揭晓释义</button>}
-              <button className="daily-review-close" type="button" onClick={() => setDailyWordIds([])} aria-label="退出今日复习" title="退出今日复习"><X size={17} /></button>
+              ) : <button type="button" onClick={() => setDailyRevealed(true)}>揭晓答案</button>}
+              <button className="daily-review-close" type="button" onClick={() => { dailyCardRun.current += 1; setDailyCardLoading(false); setDailyWordIds([]) }} aria-label="退出今日复习" title="退出今日复习"><X size={17} /></button>
               {dailyError && <p role="alert">{dailyError}</p>}
             </div>
           )}

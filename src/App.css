@@ -249,6 +249,11 @@
 .stats strong { color: var(--coral-dark); font-family: var(--display); font-size: 34px; }
 .stats span { color: var(--muted); font-size: 12px; }
 .daily-review { padding: 18px 0; color: var(--ink); border-top: 1px solid var(--ink); }
+.due-card-groups { display: flex; margin: 14px 0 0; flex-wrap: wrap; gap: 8px; }
+.due-card-groups button { min-height: 36px; }
+.due-card-groups button strong { color: var(--lime); }
+.due-card-detail { padding: 0 0 8px; }
+.due-card-detail p { margin: 4px 0; }
 .daily-review-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .daily-review h2 { margin: 0; color: var(--ink); font-family: var(--display); font-size: 23px; }
 .daily-review h2 span { color: var(--coral-dark); }
