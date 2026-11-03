@@ -33,6 +33,30 @@ type TokenUsage = {
   totalTokens: number
 }
 
+type ReviewQuestion = Record<string, unknown> & { options: string[]; correctIndex: number }
+
+function shuffle<T>(values: readonly T[]): T[] {
+  const shuffled = [...values]
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const target = Math.floor(Math.random() * (index + 1))
+    ;[shuffled[index], shuffled[target]] = [shuffled[target], shuffled[index]]
+  }
+  return shuffled
+}
+
+function randomizeAnswerOptions(questions: ReviewQuestion[]): ReviewQuestion[] {
+  const positions = shuffle([0, 1, 2, 3])
+  const targets = shuffle(questions.map((_, index) => positions[index % positions.length]))
+  return questions.map((question, index) => {
+    const correctAnswer = question.options[question.correctIndex]
+    const options = shuffle(question.options)
+    const previousIndex = options.indexOf(correctAnswer)
+    const correctIndex = targets[index]
+    ;[options[previousIndex], options[correctIndex]] = [options[correctIndex], options[previousIndex]]
+    return { ...question, options, correctIndex }
+  })
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -192,7 +216,7 @@ Deno.serve(async (request) => {
       tokenUsage.completionTokens += result.tokenUsage.completionTokens
       tokenUsage.totalTokens += result.tokenUsage.totalTokens
       const quiz = validateQuiz(JSON.parse(result.content), reviewRequest, words)
-      if (quiz) return jsonResponse({ ...quiz, tokenUsage })
+      if (quiz) return jsonResponse({ ...quiz, questions: randomizeAnswerOptions(quiz.questions as ReviewQuestion[]), tokenUsage })
       lastError = 'AI 未能生成完整的四选一题'
     } catch (cause) {
       if (cause instanceof BudgetExceededError) return jsonResponse({ error: cause.message }, 429)

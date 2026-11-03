@@ -9,7 +9,7 @@ const source = fs.readFileSync(path.join(__dirname, '../functions/generate-revie
 const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
 const word = { id: 'word-1', term: 'postpone', meaning: '推迟', note: '' }
 
-function createHandler(questions, words = [word]) {
+function createHandler(questions, words = [word], random = Math.random) {
   let handler
   const prompts = []
   const owner = { ownerId: 'owner', admin: { from: () => ({
@@ -30,7 +30,7 @@ function createHandler(questions, words = [word]) {
       }
       : name.includes('paid-budget') ? { BudgetExceededError: class extends Error {} } : { resolveOwner: async () => owner },
     Deno: { serve: (callback) => { handler = callback }, env: { get: () => 'configured' } },
-    Response, console,
+    Response, console, Math: Object.assign(Object.create(Math), { random }),
   })
   return { handler, prompts }
 }
@@ -44,8 +44,8 @@ function question(type, index) {
   }
 }
 
-async function requestReview(handler, mode, wordIds = [word.id]) {
-  const body = { wordIds, questionCount: 5, difficulty: 'basic', provider: 'deepseek' }
+async function requestReview(handler, mode, wordIds = [word.id], questionCount = 5) {
+  const body = { wordIds, questionCount, difficulty: 'basic', provider: 'deepseek' }
   if (mode !== undefined) body.mode = mode
   return handler(new Request('https://example.test/generate-review', {
     method: 'POST', headers: { Authorization: 'Bearer test' }, body: JSON.stringify(body),
@@ -109,4 +109,48 @@ test('existing clients default to standard questions and unknown modes are rejec
   const { handler } = createHandler(Array.from({ length: 5 }, (_, index) => question('meaning', index)))
   assert.equal((await requestReview(handler)).status, 200)
   assert.equal((await requestReview(handler, 'contextual')).status, 422)
+})
+
+test('answer positions are balanced while correct content and feedback are preserved', async () => {
+  for (const mode of ['standard', 'context']) {
+    for (const count of [5, 8, 60]) {
+      const questions = Array.from({ length: count }, (_, index) => question(mode === 'standard' ? 'meaning' : index % 2 ? 'collocation' : 'scenario', index))
+      questions.forEach((item, index) => { item.correctIndex = index % 4 })
+      const original = JSON.parse(JSON.stringify(questions))
+      const { handler, prompts } = createHandler(questions)
+      const response = await requestReview(handler, mode, [word.id], count)
+      assert.equal(response.status, 200)
+      const result = await response.json()
+      const counts = [0, 0, 0, 0]
+      result.questions.forEach((item, index) => {
+        counts[item.correctIndex] += 1
+        assert.equal(item.options[item.correctIndex], original[index].options[original[index].correctIndex])
+        assert.deepEqual([...item.options].sort(), [...original[index].options].sort())
+        assert.deepEqual({ ...item, options: original[index].options, correctIndex: original[index].correctIndex }, original[index])
+      })
+      assert.ok(Math.max(...counts) - Math.min(...counts) <= 1)
+      assert.ok(counts.every(value => value > 0))
+      assert.deepEqual(questions, original)
+      assert.equal(prompts.length, 1)
+      assert.equal(result.tokenUsage.totalTokens, 2)
+    }
+  }
+})
+
+test('model answers all at A are redistributed and the order varies with randomness', async () => {
+  const questions = Array.from({ length: 8 }, (_, index) => question('meaning', index))
+  const orders = []
+  for (const random of [() => 0, () => 0.99]) {
+    const { handler } = createHandler(questions, [word], random)
+    const response = await requestReview(handler, 'standard', [word.id], questions.length)
+    const result = await response.json()
+    const counts = [0, 0, 0, 0]
+    result.questions.forEach(item => {
+      counts[item.correctIndex] += 1
+      assert.equal(item.options[item.correctIndex], 'postpone')
+    })
+    assert.deepEqual(counts, [2, 2, 2, 2])
+    orders.push(result.questions.map(item => item.correctIndex))
+  }
+  assert.notDeepEqual(orders[0], orders[1])
 })
