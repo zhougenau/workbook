@@ -1224,6 +1224,7 @@ function App() {
                   provider={aiProvider}
                   key={quickReviewRequest ? `quick-${quickReviewRequest}` : 'manual'}
                   selectedWords={selectedWords}
+                  allWords={entries}
                   prepareWords={prepareReviewWords}
                   applyMasteryChanges={applyReviewMasteryChanges}
                   autoStart={quickReviewRequest > 0}

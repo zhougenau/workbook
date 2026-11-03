@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import type { AiProvider } from '@wordbook/core'
+import { selectFlashcardWords, type AiProvider } from '@wordbook/core'
 import { ArrowLeft, ArrowRight, BrainCircuit, Check, LoaderCircle, RotateCcw, X } from 'lucide-react'
 import { calculateMasteryChanges, generateReview, type MasteryChange, type ReviewDifficulty, type ReviewMode, type ReviewQuiz } from './review'
 import type { VocabularyEntry } from './storage'
@@ -7,6 +7,7 @@ import type { VocabularyEntry } from './storage'
 type ReviewPanelProps = {
   provider: AiProvider
   selectedWords: VocabularyEntry[]
+  allWords: VocabularyEntry[]
   prepareWords: () => Promise<Record<string, string>>
   applyMasteryChanges: (changes: MasteryChange[]) => Promise<void>
   onClose: () => void
@@ -31,7 +32,7 @@ function TokenUsage({ quiz }: { quiz: ReviewQuiz }) {
   )
 }
 
-export function ReviewPanel({ provider, selectedWords, prepareWords, applyMasteryChanges, onClose, autoStart = false }: ReviewPanelProps) {
+export function ReviewPanel({ provider, selectedWords, allWords, prepareWords, applyMasteryChanges, onClose, autoStart = false }: ReviewPanelProps) {
   const [questionCount, setQuestionCount] = useState(5)
   const [difficulty, setDifficulty] = useState<ReviewDifficulty>('basic')
   const [mode, setMode] = useState<ReviewMode>('standard')
@@ -50,7 +51,11 @@ export function ReviewPanel({ provider, selectedWords, prepareWords, applyMaster
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const createQuiz = async (reviewWordIds?: string[]) => {
-    if ((!selectedWords.length && !reviewWordIds?.length) || loading) return
+    if ((!allWords.length && !reviewWordIds?.length) || loading) return
+    const sourceWords = reviewWordIds
+      ? quizWords.filter((word) => reviewWordIds.includes(word.id))
+      : selectFlashcardWords(allWords, selectedWords.map((word) => word.id), questionCount).slice(0, 60)
+    if (!sourceWords.length) return
     activeRequest.current?.abort()
     const request = new AbortController()
     activeRequest.current = request
@@ -59,14 +64,11 @@ export function ReviewPanel({ provider, selectedWords, prepareWords, applyMaster
     try {
       const idRemap = await prepareWords()
       request.signal.throwIfAborted()
-      const canonicalWords = selectedWords.map((word) => ({
+      const canonicalWords = sourceWords.map((word) => ({
         ...word,
         id: idRemap[word.id] ?? word.id,
       }))
-      const wordIds = reviewWordIds ?? canonicalWords
-        .map((word) => word.id)
-        .sort(() => Math.random() - 0.5)
-        .slice(0, 60)
+      const wordIds = canonicalWords.map((word) => word.id)
       const effectiveQuestionCount = Math.max(questionCount, wordIds.length)
       const result = await generateReview(wordIds, effectiveQuestionCount, difficulty, request.signal, provider, mode)
       setQuizWords(canonicalWords)
@@ -115,7 +117,7 @@ export function ReviewPanel({ provider, selectedWords, prepareWords, applyMaster
           <div>
             <span className="review-kicker"><BrainCircuit size={16} />AI REVIEW</span>
             <h3 id="review-panel-title">生成复习题</h3>
-            <p>已选择 {selectedWords.length} 个单词，每个题源词至少覆盖 1 道题{selectedWords.length > 60 ? '，本轮随机抽取 60 个词' : ''}。</p>
+            <p>{selectedWords.length ? `已选择 ${selectedWords.length} 个单词` : `随机复习 · ${Math.min(questionCount, allWords.length)} 个题源词`}，每个题源词至少覆盖 1 道题{selectedWords.length > 60 ? '，本轮抽取 60 个词' : ''}。</p>
           </div>
           <button className="review-close" type="button" onClick={onClose} title="退出复习选择" aria-label="退出复习选择"><X size={18} /></button>
         </div>
@@ -139,12 +141,12 @@ export function ReviewPanel({ provider, selectedWords, prepareWords, applyMaster
               {Object.entries(difficultyLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </label>
-          <button className="generate-review-button" type="button" onClick={() => void createQuiz()} disabled={!selectedWords.length || loading}>
+          <button className="generate-review-button" type="button" onClick={() => void createQuiz()} disabled={!allWords.length || loading}>
             {loading ? <LoaderCircle className="spin" size={18} /> : <BrainCircuit size={18} />}
             {loading ? '正在生成…' : 'AI 生成题目'}
           </button>
         </div>
-        {!selectedWords.length && <p className="review-hint">请先勾选至少一个单词。</p>}
+        {!allWords.length && <p className="review-hint">词库为空。</p>}
         {error && <p className="review-error" role="alert">{error}</p>}
       </section>
     )

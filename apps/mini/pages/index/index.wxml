@@ -228,7 +228,7 @@
       </view>
       <view class="ai-actions">
         <button class="ai-action--passage" bindtap="createPassage" loading="{{aiStatus === 'checking'}}" disabled="{{!aiSelectedIds.length || aiStatus === 'checking'}}">生成短文</button>
-        <button class="ai-action--review" bindtap="createReview" loading="{{aiStatus === 'checking'}}" disabled="{{!aiSelectedIds.length || aiStatus === 'checking'}}">生成复习题</button>
+        <button class="ai-action--review" bindtap="createReview" loading="{{aiStatus === 'checking'}}" disabled="{{!entries.length || aiStatus === 'checking'}}">{{aiSelectedIds.length ? '生成复习题' : '随机复习题'}}</button>
         <button class="ai-action--flashcard" bindtap="createFlashcards" loading="{{aiStatus === 'checking'}}" disabled="{{!entries.length || aiStatus === 'checking'}}">{{aiSelectedIds.length ? '生成卡片' : '随机卡片'}}</button>
       </view>
       <text class="ai-message ai-message--{{aiStatus}}">{{aiMessage}}</text>

@@ -636,10 +636,15 @@ Page({
     }
   },
 
-  async prepareAiWords() {
+  async prepareAiWords(randomLimit = 0) {
     if (!loadSession()) throw new Error('请先连接微信身份')
-    if (!this.data.aiSelectedIds.length) throw new Error('请先从词库选择单词')
+    if (!this.data.aiSelectedIds.length && !randomLimit) throw new Error('请先从词库选择单词')
     await this.synchronize(false)
+    if (randomLimit) {
+      const words = selectFlashcardWords(loadEntries(), this.data.aiSelectedIds, randomLimit)
+      if (!words.length) throw new Error('词库为空')
+      return words.map((word) => word.id)
+    }
     return this.data.aiSelectedIds
   },
 
@@ -680,7 +685,7 @@ Page({
       currentFlashcard: null,
     })
     try {
-      const wordIds = await this.prepareAiWords()
+      const wordIds = await this.prepareAiWords(5)
       const questionCount = Math.max(5, wordIds.length)
       const result = await generateReview(wordIds, questionCount, this.data.aiDifficulty, this.data.aiProvider, mode)
       if (mode === 'context' && (!result.questions?.every((question) => ['scenario', 'collocation'].includes(question.type)) ||
