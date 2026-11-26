@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "bsp_battery.h"
 #include "bsp_button.h"
@@ -6,6 +7,8 @@
 #include "bsp_pins.h"
 #include "key_guard.h"
 #include "wordbook_data.h"
+#include "wordbook_pack.h"
+#include "wordbook_sync.h"
 #include "wordbook_state.h"
 #include "wordbook_strings.h"
 #include "esp_heap_caps.h"
@@ -54,6 +57,14 @@ static lv_obj_t *s_pages;
 static lv_obj_t *s_battery;
 static lv_obj_t *s_storage;
 static lv_obj_t *s_bar;
+static lv_obj_t *s_brand;
+static const wordbook_entry_t *s_entries = wordbook_entries;
+static wordbook_pack_t s_daily;
+static char *s_daily_bytes;
+static wordbook_state_t s_offline_position;
+static bool s_syncing;
+static QueueHandle_t s_completed;
+typedef struct { char *data; size_t size; } sync_result_t;
 
 static lv_obj_t *label_at(lv_obj_t *parent, int x, int y, int width, int height,
                           const lv_font_t *font, uint32_t color)
@@ -82,7 +93,7 @@ static bool text_fits(const char *text, size_t bytes, void *context)
 
 static bool prepare_word(void)
 {
-    const wordbook_entry_t *entry = &wordbook_entries[s_state.word];
+    const wordbook_entry_t *entry = &s_entries[s_state.word];
     const int written = snprintf(s_text, sizeof(s_text), "%s\n\n%s",
         entry->meaning[0] ? entry->meaning : WORDBOOK_NO_MEANING,
         entry->note[0] ? entry->note : WORDBOOK_NO_NOTE);
@@ -95,7 +106,7 @@ static bool prepare_word(void)
 
 static void render_word(bool rebuild)
 {
-    const wordbook_entry_t *entry = &wordbook_entries[s_state.word];
+    const wordbook_entry_t *entry = &s_entries[s_state.word];
     bool valid = !rebuild || prepare_word();
     lv_point_t term_size;
     const lv_font_t *term_font = &lv_font_montserrat_20;
@@ -132,8 +143,8 @@ static void create_screen(void)
     lv_obj_set_style_bg_color(screen, lv_color_hex(0xF4F7F5), 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
     lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *brand = label_at(screen, 22, 16, 115, 20, &lv_font_montserrat_14, 0x007D72);
-    lv_label_set_text(brand, "WORD BOOK");
+    s_brand = label_at(screen, 22, 16, 125, 20, &lv_font_montserrat_14, 0x007D72);
+    lv_label_set_text(s_brand, "WORD BOOK");
     s_battery = label_at(screen, 155, 16, 63, 20, &lv_font_montserrat_14, 0x505B55);
     lv_obj_set_style_text_align(s_battery, LV_TEXT_ALIGN_RIGHT, 0);
     lv_label_set_text(s_battery, LV_SYMBOL_BATTERY_FULL " --");
@@ -200,6 +211,59 @@ static void save_progress(void)
     }
 }
 
+static void sync_status(const char *message)
+{
+    if (bsp_lvgl_lock(1000)) {
+        lv_label_set_text(s_body, message);
+        bsp_lvgl_unlock();
+    }
+}
+
+static void sync_worker(void *argument)
+{
+    sync_result_t result = {0};
+    result.data = wordbook_sync_fetch(argument != NULL, sync_status, &result.size);
+    xQueueSend(s_completed, &result, portMAX_DELAY);
+    vTaskDelete(NULL);
+}
+
+static bool body_glyph(uint32_t code)
+{
+    lv_font_glyph_dsc_t desc = {0};
+    return lv_font_get_glyph_dsc(&wordbook_font_16, &desc, code, 0) && !desc.is_placeholder;
+}
+
+static void apply_download(sync_result_t result)
+{
+    wordbook_pack_t pack;
+    bool valid = wordbook_pack_parse(result.data, result.size, body_glyph, &pack);
+    const wordbook_state_t before = s_state;
+    const wordbook_entry_t *prior = s_entries;
+    if (valid) {
+        s_entries = pack.entries;
+        wordbook_state_init(&s_state, pack.count, 0);
+        for (size_t index = 0; index < pack.count; index++) {
+            s_state.word = index;
+            if (!prepare_word()) { valid = false; break; }
+        }
+    }
+    if (valid) {
+        if (prior == wordbook_entries) s_offline_position = before;
+        s_daily = pack;
+        s_entries = s_daily.entries;
+        free(s_daily_bytes);
+        s_daily_bytes = result.data;
+        wordbook_state_init(&s_state, pack.count, 0);
+    } else {
+        free(result.data);
+        s_entries = prior;
+        s_state = before;
+    }
+    lv_label_set_text(s_brand, s_daily_bytes ? "TODAY" : "WORD BOOK");
+    render_word(true);
+    lv_label_set_text(s_storage, valid ? "SYNC OK" : "PACK REJECTED");
+}
+
 static void reader_task(void *argument)
 {
     (void)argument;
@@ -207,21 +271,52 @@ static void reader_task(void *argument)
     int64_t last_action = esp_timer_get_time();
     int brightness = 75;
     for (;;) {
-        wordbook_action_t action;
+        int action;
+        sync_result_t completed;
+        if (s_syncing && uxQueueMessagesWaiting(s_completed) && bsp_lvgl_lock(1000)) {
+            if (xQueueReceive(s_completed, &completed, 0) == pdTRUE) {
+                s_syncing = false;
+                if (completed.data) apply_download(completed);
+                else lv_label_set_text(s_storage, "PRESS A KEY");
+            }
+            bsp_lvgl_unlock();
+        }
         if (xQueueReceive(s_input_queue, &action, pdMS_TO_TICKS(250)) == pdTRUE) {
             last_action = esp_timer_get_time();
+            if (s_syncing) continue;
+            if ((action == 3 || action == 4) && s_save_pending) {
+                save_progress();
+                if (s_save_pending) continue;
+            }
             if (bsp_lvgl_lock(1000)) {
+                if (action == 3 || action == 4) {
+                    lv_label_set_text(s_term, "Today sync");
+                    lv_label_set_text(s_body, "Starting wireless...");
+                    lv_label_set_text(s_storage, "");
+                    s_syncing = xTaskCreate(sync_worker, "wb_sync", 8192, action == 4 ? &s_daily : NULL, 4, NULL) == pdPASS;
+                    if (!s_syncing) lv_label_set_text(s_storage, "NO RAM");
+                } else if (action == 5 || lv_label_get_text(s_storage)[0] == 'P') {
+                    if (action == 5 && s_daily_bytes) {
+                        s_entries = wordbook_entries;
+                        s_state = s_offline_position;
+                        free(s_daily_bytes); s_daily_bytes = NULL;
+                        lv_label_set_text(s_brand, "WORD BOOK");
+                    }
+                    render_word(true);
+                    render_storage();
+                } else {
                 const size_t previous_word = s_state.word;
-                if (wordbook_state_step(&s_state, action)) {
+                if (wordbook_state_step(&s_state, (wordbook_action_t)action)) {
                     render_word(previous_word != s_state.word);
-                    s_save_pending = s_store_open;
+                    s_save_pending = s_store_open && !s_daily_bytes;
                     s_save_due = esp_timer_get_time() + SAVE_DELAY_US;
+                }
                 }
                 bsp_lvgl_unlock();
             }
         }
         const int64_t now = esp_timer_get_time();
-        const int requested = wordbook_idle_brightness(now - last_action);
+        const int requested = s_syncing ? 75 : wordbook_idle_brightness(now - last_action);
         if (requested != brightness) {
             bsp_display_backlight(requested);
             brightness = requested;
@@ -250,8 +345,13 @@ static void on_key(bsp_btn_t button, bsp_btn_ev_t event, void *user)
     (void)user;
     if (key_guard_consume(&s_key_guard, event == BSP_BTN_RELEASE, esp_timer_get_time())) return;
     if (!s_input_ready || !s_input_queue) return;
+    if (event == BSP_BTN_LONG) {
+        int command = button == BSP_BTN_OK ? 3 : button == BSP_BTN_DOWN ? 4 : 5;
+        (void)xQueueSend(s_input_queue, &command, 0);
+        return;
+    }
     if (event != BSP_BTN_CLICK && event != BSP_BTN_DOUBLE) return;
-    wordbook_action_t action;
+    int action;
     if (button == BSP_BTN_UP) action = WORDBOOK_PREVIOUS;
     else if (button == BSP_BTN_DOWN) action = WORDBOOK_NEXT;
     else if (button == BSP_BTN_OK) action = WORDBOOK_PAGE;
@@ -280,8 +380,9 @@ void app_main(void)
     create_screen();
     bsp_lvgl_unlock();
     bsp_display_backlight(75);
-    s_input_queue = xQueueCreate(12, sizeof(wordbook_action_t));
-    if (!s_input_queue) {
+    s_completed = xQueueCreate(1, sizeof(sync_result_t));
+    s_input_queue = xQueueCreate(12, sizeof(int));
+    if (!s_input_queue || !s_completed) {
         ESP_LOGE(TAG, "Input queue allocation failed");
         return;
     }

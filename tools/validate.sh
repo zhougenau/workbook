@@ -37,6 +37,8 @@ run_static_checks() {
         tests/test_wordbook.c main/wordbook_state.c \
         -o "${test_dir}/test_wordbook"
     "${test_dir}/test_wordbook"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain tests/test_wordbook_pack.c main/wordbook_pack.c -o "${test_dir}/test_wordbook_pack"
+    "${test_dir}/test_wordbook_pack"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
         tests/test_ui_pixel_math.c main/ui_pixel_math.c \
         -o "${test_dir}/test_ui_pixel_math"
