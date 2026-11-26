@@ -63,6 +63,7 @@ import {
   type VocabularyEntry,
 } from './storage'
 import { isCloudConfigured, supabase } from './supabase'
+import { encodePassportPack, passportCodeHash } from './passportPack'
 import { synchronize } from './sync'
 import { ReviewPanel } from './ReviewPanel'
 import type { MasteryChange } from './review'
@@ -192,6 +193,7 @@ function App() {
   const [passageSelecting, setPassageSelecting] = useState(false)
   const [flashcardSelecting, setFlashcardSelecting] = useState(false)
   const [selectedWordIds, setSelectedWordIds] = useState<string[]>([])
+  const [passportSelecting, setPassportSelecting] = useState(false)
   const [quickReviewRequest, setQuickReviewRequest] = useState(0)
   const [chatWord, setChatWord] = useState<VocabularyEntry | null>(null)
   const syncTimer = useRef<number | null>(null)
@@ -247,6 +249,7 @@ function App() {
   }
 
   const toggleReviewSelection = () => {
+    setPassportSelecting(false)
     if (!user) {
       setCloudOpen(true)
       setSyncMessage('AI 复习需要登录，以便服务端安全调用所选 AI 接入商。')
@@ -260,6 +263,7 @@ function App() {
   }
 
   const togglePassageSelection = () => {
+    setPassportSelecting(false)
     if (!user) {
       setCloudOpen(true)
       setSyncMessage('AI 短文需要登录，以便服务端安全调用所选 AI 接入商。')
@@ -273,6 +277,7 @@ function App() {
   }
 
   const toggleFlashcardSelection = () => {
+    setPassportSelecting(false)
     if (!user) {
       setCloudOpen(true)
       setSyncMessage('AI 卡片需要登录，以便服务端安全调用所选 AI 接入商。')
@@ -286,6 +291,7 @@ function App() {
   }
 
   const startSingleWordReview = (id: string) => {
+    setPassportSelecting(false)
     if (!user) {
       setCloudOpen(true)
       setSyncMessage('AI 测试需要登录，以便服务端安全调用所选 AI 接入商。')
@@ -779,6 +785,19 @@ function App() {
     URL.revokeObjectURL(url)
   }
 
+  const publishPassport = async () => {
+    if (!supabase || !user) { setMessage('请先登录，再向 Passport 发送词单'); return }
+    const code = window.prompt('输入 Passport 屏上显示的 16 位领取码')
+    if (!code) return
+    try {
+      const payload = encodePassportPack(selectedWords)
+      const code_hash = await passportCodeHash(code)
+      const { error } = await supabase.from('passport_daily_packs').upsert({ owner_id: user.id, code_hash, payload })
+      if (error) throw new Error('发送失败，请检查网络和 Passport 服务配置')
+      setMessage('今日词单已发送，请在 Passport 上领取')
+    } catch (error) { setMessage(error instanceof Error ? error.message : '发送失败') }
+  }
+
   const importEntries = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -909,7 +928,7 @@ function App() {
   const masteredCount = entries.filter((entry) => entry.mastery === 5).length
   const learningCount = entries.filter((entry) => entry.mastery > 0 && entry.mastery < 5).length
   const selectedWords = entries.filter((entry) => selectedWordIds.includes(entry.id))
-  const selectingWords = reviewSelecting || passageSelecting || flashcardSelecting
+  const selectingWords = passportSelecting || reviewSelecting || passageSelecting || flashcardSelecting
   const pagination = paginate(visibleEntries, currentPage, pageSize)
   const { currentPage: activePage, totalPages, items: paginatedEntries } = pagination
   const onlyPageWordsSelected = paginatedEntries.length > 0
@@ -1136,6 +1155,10 @@ function App() {
             <span className="section-number">02</span>
             <div><h2 id="library-title">我的单词本</h2><p role="status" aria-live="polite">{visibleEntries.length} 个词条</p></div>
             <div className="library-actions">
+              <button className={`review-start-button ${passportSelecting ? 'active' : ''}`} type="button" disabled={!entries.length} aria-pressed={passportSelecting} onClick={() => {
+                setReviewSelecting(false); setPassageSelecting(false); setFlashcardSelecting(false)
+                setQuickReviewRequest(0); setSelectedWordIds([]); setPassportSelecting(!passportSelecting)
+              }}><BookText size={17} />{passportSelecting ? '取消词单' : '今日词单'}</button>
               <button className="clear-all-button" type="button" onClick={() => void clearAllEntries()} disabled={!entries.length}>
                 <Trash2 size={17} />清空
               </button>
@@ -1214,6 +1237,7 @@ function App() {
             <>
               <div className="review-selection-bar">
                 <span>已选择 <strong>{selectedWordIds.length}</strong> / {entries.length} 个单词</span>
+                {passportSelecting && <button type="button" onClick={publishPassport} disabled={!selectedWordIds.length || selectedWordIds.length > 20}>发送到 Passport</button>}
                 <button type="button" onClick={() => toggleSelectAllWords(paginatedEntries.map((entry) => entry.id))}>
                   {onlyPageWordsSelected ? <X size={16} /> : <CheckSquare2 size={16} />}
                   {onlyPageWordsSelected ? '取消本页' : '一键全选'}

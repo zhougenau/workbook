@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.link-wechat-account]
 verify_jwt = false
+
+[functions.passport-claim]
+verify_jwt = false
