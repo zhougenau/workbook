@@ -1,0 +1,23 @@
+const assert = require('node:assert/strict');
+const { prepare } = require('../tools/wordbook.cjs');
+
+const original = { id: 'one', term: ' example ', meaning: '例子（）', note: 'One example.\r\n一个例子。', ownerId: 'private-owner', syncStatus: 'synced' };
+const result = prepare([original, { id: 'bad', term: 'd', meaning: '', note: 'Incomplete' }]);
+assert.equal(result.words.length, 1);
+assert.equal(result.words[0].term, 'example');
+assert.equal(result.words[0].meaning, '例子');
+assert.equal(result.words[0].note, 'One example.\n一个例子。');
+assert.equal(result.excluded.length, 1);
+assert(!result.source.includes('private-owner'));
+assert(!result.source.includes('ownerId'));
+assert.equal(original.meaning, '例子（）');
+assert.equal(prepare([{ ...original, note: '' }]).words[0].note, '');
+assert.throws(() => prepare([original, original]), /Duplicate ID/);
+assert.throws(() => prepare([original, { ...original, id: 'two' }]), /Duplicate term/);
+assert.throws(() => prepare([{ ...original, note: '\0' }]), /Control character/);
+assert.throws(() => prepare([{ ...original, note: '\ud800' }]), /Invalid Unicode/);
+assert.throws(() => prepare([{ ...original, note: 'x'.repeat(2049) }]), /budget/);
+assert.throws(() => prepare([{ ...original, term: '' }]), /Invalid term/);
+assert.throws(() => prepare([{ ...original, deletedAt: '2026-01-01' }]), /word count/);
+assert.throws(() => prepare({}), /array/);
+console.log('Wordbook import: PASS');

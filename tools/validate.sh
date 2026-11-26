@@ -20,6 +20,8 @@ run_static_checks() {
     fi
 
     python3 tools/check_repo.py
+    node tests/test_wordbook.cjs
+    node tools/wordbook.cjs check
 
     actionlint_bin="${ACTIONLINT_BIN:-}"
     if [[ -z "${actionlint_bin}" ]]; then
@@ -31,6 +33,10 @@ run_static_checks() {
     "${actionlint_bin}" -color .github/workflows/*.yml
 
     test_dir="$(mktemp -d /tmp/ai-passport-host-tests.XXXXXX)"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_wordbook.c main/wordbook_state.c \
+        -o "${test_dir}/test_wordbook"
+    "${test_dir}/test_wordbook"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
         tests/test_ui_pixel_math.c main/ui_pixel_math.c \
         -o "${test_dir}/test_ui_pixel_math"
@@ -88,6 +94,8 @@ run_static_checks() {
 
 run_firmware_checks() (
     local validation_build_dir
+
+    node tools/wordbook.cjs check
 
     if ! command -v idf.py >/dev/null 2>&1; then
         echo "ERROR: idf.py is not available; activate ESP-IDF 5.5.3 first." >&2

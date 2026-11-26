@@ -10,6 +10,19 @@
 
 可复用的字库文件与生成的字库源码放在 `fonts/`。
 
+Pocket Wordbook 使用 `fonts/wordbook_font_16.c`：Adobe Source Han Sans SC
+Regular，16 px、未压缩 4 bpp，SIL OFL 1.1。保留配套的
+[`fonts/LICENSE.txt`](fonts/LICENSE.txt)。官方源文件为
+[SourceHanSansSC-Regular.otf](https://raw.githubusercontent.com/adobe-fonts/source-han-sans/release/OTF/SimplifiedChinese/SourceHanSansSC-Regular.otf)，
+SHA-256 为 `f1d8611151880c6c336aabeac4640ef434fa13cbfbf1ffe82d0a71b2a5637256`。
+将官方许可证放在 OTF 旁，使用 1.5.3 版转换器执行
+`node tools/wordbook.cjs font <source.otf> <lv_font_conv.js>`。
+字符清单来自所选本地词库、界面文案及可打印 ASCII；
+`node tools/wordbook.cjs check` 校验生成的 cmap。内容改变后需重新生成。
+正文显式选择该字体，词头和状态使用配置的 Montserrat 字体。
+私人词库放在忽略的 `build/wordbook/`，不放入受版本控制的资源；
+小型原创示例为 [`wordbook/sample.c`](wordbook/sample.c)。
+
 - 命名要能反映字族、字重、字级与格式。
 - 记录来源、许可、字符范围、转换命令与目标放置路径。
 - 添加字库前评估 Flash 与内部 RAM 影响；ESP32-C3 无 PSRAM。
