@@ -214,6 +214,20 @@ async function generateSpeech(text) {
 }
 
 module.exports = {
+  async publishPassport(entries, code) {
+    const session = loadSession()
+    if (!session) throw new Error('请先连接微信身份')
+    try {
+      const result = await request('/passport-publish', {
+        method: 'POST', header: { Authorization: `Bearer ${session.token}` },
+        data: { code, entries: entries.map(({ id, term, meaning, note }) => ({ id, term, meaning, note: note || '' })) },
+      })
+      if (!result || result.ok !== true) throw new Error('未确认发送成功，请重试')
+    } catch (error) {
+      if (error.statusCode === 401) wx.removeStorageSync(SESSION_KEY)
+      throw error
+    }
+  },
   checkHealth,
   completeWord,
   getPaidUsage,

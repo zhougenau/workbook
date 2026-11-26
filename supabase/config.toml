@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.passport-claim]
 verify_jwt = false
+
+[functions.passport-publish]
+verify_jwt = false

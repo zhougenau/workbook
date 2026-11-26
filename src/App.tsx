@@ -63,7 +63,7 @@ import {
   type VocabularyEntry,
 } from './storage'
 import { isCloudConfigured, supabase } from './supabase'
-import { encodePassportPack, passportCodeHash } from './passportPack'
+import { encodePassportPack, passportCodeHash } from '../supabase/functions/_shared/passport-pack'
 import { synchronize } from './sync'
 import { ReviewPanel } from './ReviewPanel'
 import type { MasteryChange } from './review'

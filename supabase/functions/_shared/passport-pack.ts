@@ -1,4 +1,4 @@
-type Entry = { id: string; term: string; meaning: string; note: string }
+export type Entry = { id: string; term: string; meaning: string; note: string }
 
 export function encodePassportPack(entries: Entry[]): string {
   if (!entries.length || entries.length > 20) throw new Error('请选择 1 至 20 个单词')

@@ -13,6 +13,7 @@ const {
   sendWordChatMessage,
   synchronizeEntries,
   synchronizeReviewSchedules,
+  publishPassport,
 } = require('../../utils/api')
 const {
   AI_PROVIDERS,
@@ -137,6 +138,11 @@ Page({
     pageSelectionComplete: false,
     aiWorkshopExpanded: false,
     selectionMode: false,
+    passportOpen: false,
+    passportIds: [],
+    passportCode: '',
+    passportBusy: false,
+    passportMessage: '',
     aiProviders: AI_PROVIDERS,
     aiProviderIndex: 0,
     aiProvider: DEFAULT_AI_PROVIDER,
@@ -293,7 +299,7 @@ Page({
       dailyWord,
       dailyCard: dailyWord ? this.data.dailyCards[dailyWord.id] || null : null,
       dailyOverdueDays,
-      visibleEntries: pagination.items,
+      visibleEntries: pagination.items.map(entry => ({ ...entry, passportSelected: this.data.passportIds.includes(entry.id) })),
       pageSelectionComplete: pagination.items.length > 0 && pagination.items.slice(0, 10).every((entry) => entry.aiSelected),
       currentPage: pagination.currentPage,
       totalPages: pagination.totalPages,
@@ -540,6 +546,7 @@ Page({
   },
 
   beginWordSelection(event) {
+    if (this.data.passportOpen) return
     const { id } = event.currentTarget.dataset
     if (!this.data.entries.some((entry) => entry.id === id)) return
     this.setData({ selectionMode: true, aiWorkshopExpanded: true })
@@ -552,6 +559,35 @@ Page({
   },
 
   preventWordSelection() {},
+
+  togglePassport() {
+    if (this.data.passportBusy) return
+    this.setData({ passportOpen: !this.data.passportOpen, selectionMode: false, passportIds: [], passportCode: '', passportMessage: '' }, () => this.refreshEntries())
+  },
+
+  togglePassportWord(event) {
+    if (this.data.passportBusy) return
+    const id = event.currentTarget.dataset.id
+    const ids = this.data.passportIds
+    if (!ids.includes(id) && ids.length >= 20) return this.setData({ passportMessage: '最多选择 20 个词' })
+    this.setData({ passportIds: ids.includes(id) ? ids.filter(value => value !== id) : [...ids, id], passportMessage: '' }, () => this.refreshEntries())
+  },
+
+  inputPassportCode(event) { this.setData({ passportCode: event.detail.value, passportMessage: '' }) },
+
+  async sendPassportList() {
+    if (this.data.passportBusy) return
+    const code = this.data.passportCode.replace(/[ -]/g, '').toLowerCase()
+    if (!/^[0-9a-f]{16}$/.test(code)) return this.setData({ passportMessage: '请输入设备上的 16 位 WEB CODE' })
+    const entries = loadEntries().filter(entry => this.data.passportIds.includes(entry.id))
+    if (!entries.length || entries.length !== this.data.passportIds.length || entries.length > 20) return this.setData({ passportMessage: '请重新选择 1 至 20 个词' })
+    this.setData({ passportBusy: true, passportMessage: '' })
+    try {
+      await publishPassport(entries, code)
+      this.setData({ passportCode: '', passportMessage: '词单已发送，请在 Passport 上查看' })
+    } catch (error) { this.setData({ passportMessage: error.message || '发送失败，请重试' }) }
+    finally { this.setData({ passportBusy: false }) }
+  },
 
   chooseAiLength(event) {
     this.setData({ aiLength: event.currentTarget.dataset.length })

@@ -398,6 +398,13 @@
       </view>
     </view>
 
+    <button class="selection-done" bindtap="togglePassport" disabled="{{passportBusy || (!entries.length && !passportOpen)}}">{{passportOpen ? '取消词单' : '今日词单'}}</button>
+    <view wx:if="{{passportOpen}}">
+      <text class="section-note">已选 {{passportIds.length}} / 20</text>
+      <view class="search-box"><input value="{{passportCode}}" bindinput="inputPassportCode" disabled="{{passportBusy}}" maxlength="24" placeholder="设备上的 16 位 WEB CODE" /></view>
+      <button bindtap="sendPassportList" loading="{{passportBusy}}" disabled="{{passportBusy || !passportIds.length || !passportCode}}">发送到 Passport</button>
+      <text wx:if="{{passportMessage}}" class="section-note">{{passportMessage}}</text>
+    </view>
     <view class="search-box">
       <text class="search-icon">⌕</text>
       <input value="{{search}}" bindinput="handleSearch" placeholder="搜索单词、释义或笔记" />
@@ -433,8 +440,9 @@
 
     <view wx:if="{{visibleEntries.length}}" class="word-list">
       <view wx:for="{{visibleEntries}}" wx:key="id" class="word-row {{item.aiSelected ? 'word-row--selected' : ''}}" data-id="{{item.id}}" bindlongpress="beginWordSelection" aria-label="{{item.term}}，长按选择用于 AI 学习">
+        <checkbox wx:if="{{passportOpen}}" class="ai-word-checkbox" checked="{{item.passportSelected}}" disabled="{{passportBusy}}" color="#315b47" data-id="{{item.id}}" bindtap="togglePassportWord" aria-label="选择 {{item.term}} 发送到 Passport" />
         <checkbox
-          wx:if="{{selectionMode}}"
+          wx:elif="{{selectionMode}}"
           class="ai-word-checkbox"
           checked="{{item.aiSelected}}"
           color="#315b47"
