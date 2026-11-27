@@ -35,6 +35,18 @@ static void test_pagination(void)
 int main(void)
 {
     test_pagination();
+    uint16_t order[20], replay[20];
+    for (int mode = WB_NEWEST; mode < WB_ORDER_COUNT; mode++) {
+        wordbook_order_make(order, 20, mode, 123);
+        for (size_t index = 0; index < 20; index++) {
+            assert(order[index] < 20 && wordbook_order_find(order, 20, order[index]) == index);
+            if (mode != WB_SHUFFLE) assert(order[index] == (mode == WB_NEWEST ? index : 19 - index));
+        }
+    }
+    wordbook_order_make(replay, 20, WB_SHUFFLE, 123);
+    assert(!memcmp(order, replay, sizeof(order)));
+    wordbook_order_make(replay, 20, WB_SHUFFLE, 234);
+    assert(memcmp(order, replay, sizeof(order)));
     assert(wordbook_idle_brightness(0) == 75);
     assert(wordbook_idle_brightness(59999999) == 75);
     assert(wordbook_idle_brightness(60000000) == 15);

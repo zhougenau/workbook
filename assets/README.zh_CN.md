@@ -17,8 +17,9 @@ Regular，16 px、未压缩 4 bpp，SIL OFL 1.1。保留配套的
 SHA-256 为 `f1d8611151880c6c336aabeac4640ef434fa13cbfbf1ffe82d0a71b2a5637256`。
 将官方许可证放在 OTF 旁，使用 1.5.3 版转换器执行
 `node tools/wordbook.cjs font <source.otf> <lv_font_conv.js>`。
-字符清单来自所选本地词库、界面文案及可打印 ASCII；
-`node tools/wordbook.cjs check` 校验生成的 cmap。内容改变后需重新生成。
+字库含 GB2312 的 6,763 个汉字、常用标点、可打印 ASCII、界面文案及所选本地词库用字。
+`node tools/wordbook.cjs check` 校验生成的 cmap。无线词单无需重建字库：
+遇到有效但未收录的字符，屏幕显示占位框，词单其余内容仍可阅读。
 正文显式选择该字体，词头和状态使用配置的 Montserrat 字体。
 私人词库放在忽略的 `build/wordbook/`，不放入受版本控制的资源；
 小型原创示例为 [`wordbook/sample.c`](wordbook/sample.c)。

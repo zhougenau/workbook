@@ -18,10 +18,11 @@ Regular, 16 px, uncompressed 4 bpp, SIL OFL 1.1. The accompanying
 [SourceHanSansSC-Regular.otf](https://raw.githubusercontent.com/adobe-fonts/source-han-sans/release/OTF/SimplifiedChinese/SourceHanSansSC-Regular.otf),
 SHA-256 `f1d8611151880c6c336aabeac4640ef434fa13cbfbf1ffe82d0a71b2a5637256`.
 Run `node tools/wordbook.cjs font <source.otf> <lv_font_conv.js>` with converter
-1.5.3 and the official license beside the OTF. The inventory is derived from
-the selected local word pack, UI strings and printable ASCII; `node
-tools/wordbook.cjs check` verifies the generated cmaps. Regenerate after content
-changes. The application explicitly selects this font for its body label;
+1.5.3 and the official license beside the OTF. The inventory includes all 6,763
+GB2312 Han characters, common punctuation, printable ASCII, UI strings and the
+selected local word pack. `node tools/wordbook.cjs check` verifies the generated
+cmaps. Wireless lists need no font rebuild: a valid but unsupported character
+appears as a placeholder without discarding the list. The body label uses this font;
 headwords and status labels use the configured Montserrat fonts. The private
 word pack belongs in ignored `build/wordbook/`, not in tracked assets; the
 small original example is [`wordbook/sample.c`](wordbook/sample.c).

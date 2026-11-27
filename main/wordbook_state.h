@@ -17,6 +17,10 @@ typedef enum {
     WORDBOOK_PAGE
 } wordbook_action_t;
 
+typedef enum { WB_NEWEST, WB_OLDEST, WB_SHUFFLE, WB_ORDER_COUNT } wordbook_order_t;
+void wordbook_order_make(uint16_t *indices, size_t count, wordbook_order_t mode, uint32_t seed);
+size_t wordbook_order_find(const uint16_t *indices, size_t count, size_t entry);
+
 void wordbook_state_init(wordbook_state_t *state, size_t count, size_t restored);
 void wordbook_state_pages(wordbook_state_t *state, size_t pages);
 bool wordbook_state_step(wordbook_state_t *state, wordbook_action_t action);

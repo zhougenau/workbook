@@ -14,7 +14,10 @@ function prepare(entries) {
     const excluded = [];
     const ids = new Set();
     const terms = new Set();
-    for (const entry of entries) {
+    const byAdded = entries.map(entry => ({ entry, added: Date.parse(entry?.createdAt) }));
+    byAdded.sort((left, right) => (Number.isFinite(right.added) ? right.added : -Infinity)
+        - (Number.isFinite(left.added) ? left.added : -Infinity));
+    for (const { entry } of byAdded) {
         assert(entry && typeof entry === 'object', 'Invalid entry');
         if (entry.deletedAt != null) continue;
         for (const field of ['id', 'term', 'meaning', 'note']) {
@@ -55,6 +58,15 @@ function inventory() {
         ? fs.readFileSync(path.join(local, 'wordbook_data.c'), 'utf8')
         : fs.readFileSync(path.join(root, 'assets/wordbook/sample.c'), 'utf8');
     const characters = new Set(Array.from({ length: 95 }, (_, index) => String.fromCodePoint(32 + index)));
+    const decoder = new TextDecoder('gb18030', { fatal: true });
+    const common = new Set();
+    for (let row = 0xb0; row <= 0xf7; row++) {
+        const last = row === 0xd7 ? 0xf9 : 0xfe;
+        for (let cell = 0xa1; cell <= last; cell++) common.add(decoder.decode(Uint8Array.of(row, cell)));
+    }
+    assert.equal(common.size, 6763, 'Invalid GB2312 Han inventory');
+    for (const character of common) characters.add(character);
+    for (const character of '，。；：？！、（）《》【】“”‘’—…·□') characters.add(character);
     const strings = fs.readFileSync(path.join(root, 'main/wordbook_strings.h'), 'utf8');
     const sample = fs.readFileSync(path.join(root, 'assets/wordbook/sample.c'), 'utf8');
     for (const content of [source, strings, sample]) {
@@ -69,7 +81,7 @@ function inventory() {
 
 function coveredCodepoints(source) {
     const lists = new Map();
-    for (const match of source.matchAll(/static const uint16_t (\w+)\[\]\s*=\s*\{([\s\S]*?)\};/g)) {
+    for (const match of source.matchAll(/static const uint(?:8|16)_t (\w+)\[\]\s*=\s*\{([\s\S]*?)\};/g)) {
         const body = match[2].replace(/\/\*[\s\S]*?\*\//g, '');
         lists.set(match[1], (body.match(/0x[\da-f]+|\d+/gi) || []).map(Number));
     }
@@ -85,12 +97,17 @@ function coveredCodepoints(source) {
         const start = value('range_start');
         const list = map[1].match(/\.unicode_list\s*=\s*(\w+)/)[1];
         const type = map[1].match(/\.type\s*=\s*(\w+)/)[1];
-        assert(/(?:FORMAT0_TINY|SPARSE_TINY)$/.test(type), `Unsupported cmap ${type}`);
-        if (list === 'NULL') {
+        if (type === 'LV_FONT_FMT_TXT_CMAP_FORMAT0_FULL') {
+            const offsets = lists.get(map[1].match(/\.glyph_id_ofs_list\s*=\s*(\w+)/)[1]);
+            assert.equal(offsets?.length, value('range_length'));
+            offsets.forEach((glyphOffset, index) => {
+                if (index === 0 || glyphOffset !== 0) points.add(start + index);
+            });
+        } else if (list === 'NULL') {
             assert(type === 'LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY');
             for (let offset = 0; offset < value('range_length'); offset++) points.add(start + offset);
         } else {
-            assert(type === 'LV_FONT_FMT_TXT_CMAP_SPARSE_TINY');
+            assert(['LV_FONT_FMT_TXT_CMAP_SPARSE_TINY', 'LV_FONT_FMT_TXT_CMAP_SPARSE_FULL'].includes(type));
             assert(lists.has(list), `Missing Unicode list ${list}`);
             for (const offset of lists.get(list)) points.add(start + offset);
         }
@@ -131,8 +148,8 @@ function main(args) {
         const license = path.join(path.dirname(source), 'LICENSE.txt');
         assert(fs.readFileSync(license, 'utf8').includes('SIL OPEN FONT LICENSE Version 1.1'));
         fs.mkdirSync(path.dirname(fontPath), { recursive: true });
-        const result = spawnSync(process.execPath, [converter, '--font', source, '--range',
-            inventory().map(character => '0x' + character.codePointAt(0).toString(16)).join(','),
+        const result = spawnSync(process.execPath, [converter, '--font', source, '--symbols',
+            inventory().join(''),
             '--size', '16', '--bpp', '4', '--format', 'lvgl', '--no-compress',
             '--lv-font-name', 'wordbook_font_16', '--lv-include', 'lvgl.h', '--output', fontPath], { encoding: 'utf8' });
         assert.equal(result.status, 0, result.stderr || String(result.error));

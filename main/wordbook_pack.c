@@ -1,7 +1,7 @@
 #include "wordbook_pack.h"
 #include <string.h>
 
-static bool text_ok(const unsigned char *text, size_t size, bool (*glyph)(uint32_t))
+static bool text_ok(const unsigned char *text, size_t size)
 {
     for (size_t pos = 0; pos < size;) {
         unsigned lead = text[pos++];
@@ -22,14 +22,16 @@ static bool text_ok(const unsigned char *text, size_t size, bool (*glyph)(uint32
                 (code >= 0xd800 && code <= 0xdfff) || code > 0x10ffff) return false;
         }
         if (code == '\n') continue;
-        if (code < 32 || (code >= 127 && code < 160) || !glyph(code)) return false;
+        if (code < 32 || (code >= 127 && code < 160)) return false;
     }
     return true;
 }
 
-bool wordbook_pack_parse(const char *data, size_t size, bool (*glyph)(uint32_t), wordbook_pack_t *out)
+bool wordbook_pack_parse(const char *data, size_t size, wordbook_pack_t *out)
 {
-    if (!data || !out || !glyph || size < 6 || size > WORDBOOK_PACK_LIMIT || memcmp(data, "WBP1", 4)) return false;
+    if (!data || !out || size < 6 || size > WORDBOOK_PACK_LIMIT) return false;
+    bool story = !memcmp(data, "WBP2", 4);
+    if (!story && memcmp(data, "WBP1", 4)) return false;
     wordbook_pack_t pack = {0};
     pack.count = (unsigned char)data[4];
     if (!pack.count || pack.count > WORDBOOK_PACK_WORDS) return false;
@@ -56,10 +58,20 @@ bool wordbook_pack_parse(const char *data, size_t size, bool (*glyph)(uint32_t),
                 (ch && (value == ' ' || value == '-' || value == '\'')))) return false;
         }
         for (size_t field = 2; field < 4; field++)
-            if (!text_ok((const unsigned char *)fields[field], lengths[field], glyph)) return false;
+            if (!text_ok((const unsigned char *)fields[field], lengths[field])) return false;
         for (size_t prior = 0; prior < index; prior++)
             if (!strcmp(pack.entries[prior].id, fields[0])) return false;
         pack.entries[index] = (wordbook_entry_t){ fields[0], fields[1], fields[2], fields[3] };
+    }
+    if (story) {
+        if (pack.count < 5 || pack.count > 8) return false;
+        for (size_t part = 0; part < 3; part++) {
+            const char *start = data + pos;
+            const char *end = memchr(start, 0, size - pos);
+            if (!end || end == start || end - start > 2048 || !text_ok((const unsigned char *)start, end - start)) return false;
+            pack.story[part] = start;
+            pos += (size_t)(end - start) + 1;
+        }
     }
     if (pos != size) return false;
     *out = pack;

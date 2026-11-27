@@ -66,7 +66,7 @@ static bool device_identity(char secret[65], char qr[73])
     return true;
 }
 
-static int fetch_once(const char *secret, const char *pin, response_t *body)
+static int fetch_once(const char *secret, const char *pin, unsigned recent, response_t *body)
 {
     esp_http_client_config_t config = {
         .url = "https://gvgztuwklhlhzorcoouh.supabase.co/functions/v1/passport-bound",
@@ -80,13 +80,14 @@ static int fetch_once(const char *secret, const char *pin, response_t *body)
     body->overflow = false;
     if (esp_http_client_set_header(client, "X-Passport-Device", secret) == ESP_OK &&
         (!pin || esp_http_client_set_header(client, "X-Passport-Start", pin) == ESP_OK) &&
+        (!recent || esp_http_client_set_header(client, "X-Passport-Recent", recent == 10 ? "10" : "20") == ESP_OK) &&
         esp_http_client_set_post_field(client, "", 0) == ESP_OK && esp_http_client_perform(client) == ESP_OK && !body->overflow)
         result = esp_http_client_get_status_code(client);
     esp_http_client_cleanup(client);
     return result;
 }
 
-char *wordbook_sync_fetch(bool forget_wifi, wordbook_status_t status, size_t *size)
+char *wordbook_sync_fetch(bool forget_wifi, unsigned recent, wordbook_status_t status, size_t *size)
 {
     bool wifi = false, manager = false, clock = false, success = false;
     esp_netif_t *net = NULL;
@@ -135,11 +136,18 @@ char *wordbook_sync_fetch(bool forget_wifi, wordbook_status_t status, size_t *si
     body.data = malloc(WORDBOOK_PACK_LIMIT);
     if (!body.data) { failure = "Not enough RAM"; goto done; }
     if (!device_identity(secret, qr)) { failure = "Device key unavailable"; goto done; }
+    if (recent) {
+        status("Fetching recent words");
+        int result = fetch_once(secret, NULL, recent, &body);
+        success = result == 200 && body.size;
+        failure = result == 403 ? "Pair device first" : result == 404 ? "No recent words" : result == 422 ? "List too large" : "Download failed";
+        goto done;
+    }
     snprintf(code, sizeof(code), "%04u", (unsigned)(esp_random() % 10000U));
     deadline = esp_timer_get_time() + 120000000LL;
     bool shown = false;
     for (;;) {
-        int result = fetch_once(secret, code, &body);
+        int result = fetch_once(secret, code, 0, &body);
         if (result == 200) break;
         if (result != 403) { failure = "Sync service unavailable"; goto done; }
         if (esp_timer_get_time() >= deadline) { failure = "Pairing timed out"; goto done; }
@@ -151,7 +159,7 @@ char *wordbook_sync_fetch(bool forget_wifi, wordbook_status_t status, size_t *si
     deadline = esp_timer_get_time() + 120000000LL;
     failure = "No pack received";
     while (esp_timer_get_time() < deadline) {
-        int result = fetch_once(secret, NULL, &body);
+        int result = fetch_once(secret, NULL, 0, &body);
         if (result == 200 && body.size) { success = true; break; }
         if (result != 404) { failure = "Download failed"; break; }
         vTaskDelay(pdMS_TO_TICKS(4000));

@@ -1,6 +1,30 @@
 #include "wordbook_state.h"
 #include <string.h>
 
+void wordbook_order_make(uint16_t *indices, size_t count, wordbook_order_t mode, uint32_t seed)
+{
+    for (size_t index = 0; index < count; index++)
+        indices[index] = (uint16_t)(mode == WB_OLDEST ? count - 1 - index : index);
+    if (mode != WB_SHUFFLE) return;
+    if (!seed) seed = 1;
+    for (size_t remaining = count; remaining > 1; remaining--) {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        size_t pick = seed % remaining;
+        uint16_t value = indices[pick];
+        indices[pick] = indices[remaining - 1];
+        indices[remaining - 1] = value;
+    }
+}
+
+size_t wordbook_order_find(const uint16_t *indices, size_t count, size_t entry)
+{
+    for (size_t index = 0; index < count; index++)
+        if (indices[index] == entry) return index;
+    return 0;
+}
+
 int wordbook_idle_brightness(int64_t inactive_us)
 {
     return inactive_us >= 60000000LL ? 15 : 75;

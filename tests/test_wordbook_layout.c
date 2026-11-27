@@ -41,9 +41,62 @@ static void check_glyphs(const char *text)
     }
 }
 
+static uint16_t display_pixels[64 * 48];
+static unsigned ink_pixels;
+
+static void count_ink(lv_display_t *display, const lv_area_t *area, uint8_t *pixels)
+{
+    const uint16_t *colors = (const uint16_t *)pixels;
+    for (int32_t index = 0; index < lv_area_get_size(area); index++) {
+        if (colors[index] != 0) ink_pixels++;
+    }
+    lv_display_flush_ready(display);
+}
+
+static void check_placeholder(void)
+{
+    lv_display_t *display = lv_display_create(64, 48);
+    lv_display_set_buffers(display, display_pixels, NULL, sizeof(display_pixels), LV_DISPLAY_RENDER_MODE_FULL);
+    lv_display_set_flush_cb(display, count_ink);
+    lv_obj_t *screen = lv_display_get_screen_active(display);
+    lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
+    lv_obj_t *label = lv_label_create(screen);
+    lv_obj_set_style_text_font(label, &wordbook_font_16, 0);
+    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_label_set_text(label, " ");
+    lv_refr_now(display);
+    assert(ink_pixels == 0);
+    lv_font_glyph_dsc_t glyph = {0};
+    lv_font_get_glyph_dsc(&wordbook_font_16, &glyph, 0x20000, 0);
+    assert(glyph.is_placeholder && glyph.adv_w > 0);
+    lv_label_set_text(label, "\xF0\xA0\x80\x80");
+    lv_refr_now(display);
+    assert(ink_pixels > 0);
+    lv_display_delete(display);
+}
+
 int main(void)
 {
     lv_init();
+    check_placeholder();
+    const char *const sections[] = { "After sunset the travelers returned home. ", "日落之后，他们终于回到了家。" };
+    for (size_t part = 0; part < 2; part++) {
+        char section[2049] = {0};
+        size_t length = strlen(sections[part]);
+        size_t used = 0;
+        while (used + length < sizeof(section)) {
+            memcpy(section + used, sections[part], length);
+            used += length;
+        }
+        size_t offsets[65];
+        size_t pages = wordbook_paginate(section, offsets, 65, fits, NULL);
+        assert(pages > 1 && offsets[pages] == used);
+        for (size_t page = 0; page < pages; page++) {
+            assert(((unsigned char)section[offsets[page]] & 0xc0) != 0x80);
+            assert(fits(section + offsets[page], offsets[page + 1] - offsets[page], NULL));
+        }
+    }
     size_t max_pages = 0;
     size_t multipage = 0;
     for (size_t index = 0; index < wordbook_count; index++) {
