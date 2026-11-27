@@ -214,11 +214,16 @@ async function generateSpeech(text) {
 }
 
 module.exports = {
+  async pairPassport(device) {
+    const session = loadSession()
+    if (!session) throw new Error('请先连接微信身份')
+    return request('/passport-bound', { method: 'POST', header: { Authorization: `Bearer ${session.token}` }, data: { action: 'pair', device } })
+  },
   async publishPassport(entries, code) {
     const session = loadSession()
     if (!session) throw new Error('请先连接微信身份')
     try {
-      const result = await request('/passport-publish', {
+      const result = await request('/passport-bound', {
         method: 'POST', header: { Authorization: `Bearer ${session.token}` },
         data: { code, entries: entries.map(({ id, term, meaning, note }) => ({ id, term, meaning, note: note || '' })) },
       })

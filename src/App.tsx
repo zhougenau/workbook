@@ -63,7 +63,6 @@ import {
   type VocabularyEntry,
 } from './storage'
 import { isCloudConfigured, supabase } from './supabase'
-import { encodePassportPack, passportCodeHash } from '../supabase/functions/_shared/passport-pack'
 import { synchronize } from './sync'
 import { ReviewPanel } from './ReviewPanel'
 import type { MasteryChange } from './review'
@@ -787,13 +786,12 @@ function App() {
 
   const publishPassport = async () => {
     if (!supabase || !user) { setMessage('请先登录，再向 Passport 发送词单'); return }
-    const code = window.prompt('输入 Passport 屏上显示的 16 位领取码')
+    const code = window.prompt('输入已绑定 Passport 上的 4 位数字')?.trim()
     if (!code) return
     try {
-      const payload = encodePassportPack(selectedWords)
-      const code_hash = await passportCodeHash(code)
-      const { error } = await supabase.from('passport_daily_packs').upsert({ owner_id: user.id, code_hash, payload })
-      if (error) throw new Error('发送失败，请检查网络和 Passport 服务配置')
+      if (!/^\d{4}$/.test(code)) throw new Error('请输入 4 位数字，保留开头的 0')
+      const { error } = await supabase.functions.invoke('passport-bound', { body: { code, entries: selectedWords.map(({ id, term, meaning, note }) => ({ id, term, meaning, note })) } })
+      if (error) throw new Error('发送失败，请确认已扫码绑定，并在设备上重新生成确认码')
       setMessage('今日词单已发送，请在 Passport 上领取')
     } catch (error) { setMessage(error instanceof Error ? error.message : '发送失败') }
   }

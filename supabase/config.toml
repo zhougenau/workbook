@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.passport-publish]
 verify_jwt = false
+
+[functions.passport-bound]
+verify_jwt = false

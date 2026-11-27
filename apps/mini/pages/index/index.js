@@ -14,6 +14,7 @@ const {
   synchronizeEntries,
   synchronizeReviewSchedules,
   publishPassport,
+  pairPassport,
 } = require('../../utils/api')
 const {
   AI_PROVIDERS,
@@ -575,10 +576,19 @@ Page({
 
   inputPassportCode(event) { this.setData({ passportCode: event.detail.value, passportMessage: '' }) },
 
+  scanPassport() {
+    wx.scanCode({ onlyFromCamera: true, scanType: ['qrCode'], success: async ({ result }) => {
+      const match = /^WBPAIR1:([a-f0-9]{64})$/.exec(result)
+      if (!match) return this.setData({ passportMessage: '不是 Passport 绑定二维码' })
+      try { await pairPassport(match[1]); this.setData({ passportMessage: '绑定成功，请输入设备显示的 4 位数字' }) }
+      catch (error) { this.setData({ passportMessage: error.message || '绑定失败' }) }
+    } })
+  },
+
   async sendPassportList() {
     if (this.data.passportBusy) return
-    const code = this.data.passportCode.replace(/[ -]/g, '').toLowerCase()
-    if (!/^[0-9a-f]{16}$/.test(code)) return this.setData({ passportMessage: '请输入设备上的 16 位 WEB CODE' })
+    const code = this.data.passportCode.trim()
+    if (!/^\d{4}$/.test(code)) return this.setData({ passportMessage: '请输入设备上的 4 位 WEB CODE' })
     const entries = loadEntries().filter(entry => this.data.passportIds.includes(entry.id))
     if (!entries.length || entries.length !== this.data.passportIds.length || entries.length > 20) return this.setData({ passportMessage: '请重新选择 1 至 20 个词' })
     this.setData({ passportBusy: true, passportMessage: '' })

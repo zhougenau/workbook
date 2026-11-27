@@ -398,10 +398,11 @@
       </view>
     </view>
 
-    <button class="selection-done" bindtap="togglePassport" disabled="{{passportBusy || (!entries.length && !passportOpen)}}">{{passportOpen ? '取消词单' : '今日词单'}}</button>
+    <button class="selection-done" bindtap="togglePassport" disabled="{{passportBusy}}">{{passportOpen ? '取消词单' : '今日词单'}}</button>
     <view wx:if="{{passportOpen}}">
       <text class="section-note">已选 {{passportIds.length}} / 20</text>
-      <view class="search-box"><input value="{{passportCode}}" bindinput="inputPassportCode" disabled="{{passportBusy}}" maxlength="24" placeholder="设备上的 16 位 WEB CODE" /></view>
+      <button bindtap="scanPassport" disabled="{{passportBusy}}">扫码绑定 Passport</button>
+      <view class="search-box"><input type="number" value="{{passportCode}}" bindinput="inputPassportCode" disabled="{{passportBusy}}" maxlength="4" placeholder="设备上的 4 位 WEB CODE" /></view>
       <button bindtap="sendPassportList" loading="{{passportBusy}}" disabled="{{passportBusy || !passportIds.length || !passportCode}}">发送到 Passport</button>
       <text wx:if="{{passportMessage}}" class="section-note">{{passportMessage}}</text>
     </view>
