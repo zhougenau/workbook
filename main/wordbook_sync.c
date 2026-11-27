@@ -10,6 +10,8 @@
 #include "esp_netif_sntp.h"
 #include "esp_random.h"
 #include "esp_timer.h"
+#include "mbedtls/sha256.h"
+#include "nvs.h"
 #include "esp_wifi.h"
 #include "esp_wifi_default.h"
 #include "freertos/FreeRTOS.h"
@@ -32,10 +34,42 @@ static esp_err_t receive(esp_http_client_event_t *event)
     return ESP_OK;
 }
 
-static int fetch_once(const char *code, response_t *body)
+static void hex32(const uint8_t bytes[32], char text[65])
+{
+    static const char digits[] = "0123456789abcdef";
+    for (size_t index = 0; index < 32; index++) {
+        text[index * 2] = digits[bytes[index] >> 4];
+        text[index * 2 + 1] = digits[bytes[index] & 15];
+    }
+    text[64] = '\0';
+}
+
+static bool device_identity(char secret[65], char qr[73])
+{
+    nvs_handle_t store;
+    if (nvs_open("wordbook", NVS_READWRITE, &store) != ESP_OK) return false;
+    uint8_t bytes[32];
+    size_t length = sizeof(bytes);
+    esp_err_t result = nvs_get_blob(store, "pair_key", bytes, &length);
+    if (result == ESP_ERR_NVS_NOT_FOUND) {
+        esp_fill_random(bytes, sizeof(bytes));
+        result = nvs_set_blob(store, "pair_key", bytes, sizeof(bytes));
+        if (result == ESP_OK) result = nvs_commit(store);
+        length = sizeof(bytes);
+    }
+    nvs_close(store);
+    if (result != ESP_OK || length != sizeof(bytes)) return false;
+    hex32(bytes, secret);
+    if (mbedtls_sha256((const unsigned char *)secret, 64, bytes, 0) != 0) return false;
+    memcpy(qr, "WBPAIR1:", 8);
+    hex32(bytes, qr + 8);
+    return true;
+}
+
+static int fetch_once(const char *secret, const char *pin, response_t *body)
 {
     esp_http_client_config_t config = {
-        .url = "https://gvgztuwklhlhzorcoouh.supabase.co/functions/v1/passport-claim",
+        .url = "https://gvgztuwklhlhzorcoouh.supabase.co/functions/v1/passport-bound",
         .method = HTTP_METHOD_POST, .crt_bundle_attach = esp_crt_bundle_attach,
         .timeout_ms = 6000, .disable_auto_redirect = true, .event_handler = receive, .user_data = body,
     };
@@ -44,7 +78,8 @@ static int fetch_once(const char *code, response_t *body)
     int result = -1;
     body->size = 0;
     body->overflow = false;
-    if (esp_http_client_set_header(client, "X-Passport-Code", code) == ESP_OK &&
+    if (esp_http_client_set_header(client, "X-Passport-Device", secret) == ESP_OK &&
+        (!pin || esp_http_client_set_header(client, "X-Passport-Start", pin) == ESP_OK) &&
         esp_http_client_set_post_field(client, "", 0) == ESP_OK && esp_http_client_perform(client) == ESP_OK && !body->overflow)
         result = esp_http_client_get_status_code(client);
     esp_http_client_cleanup(client);
@@ -57,7 +92,7 @@ char *wordbook_sync_fetch(bool forget_wifi, wordbook_status_t status, size_t *si
     esp_netif_t *net = NULL;
     const char *failure = "Wi-Fi unavailable";
     response_t body = {0};
-    char proof[9], name[16], code[17], message[90];
+    char proof[9], name[16], code[5], message[90], secret[65], qr[73];
     uint8_t mac[6];
     *size = 0;
     if (esp_netif_init() != ESP_OK) goto done;
@@ -99,15 +134,24 @@ char *wordbook_sync_fetch(bool forget_wifi, wordbook_status_t status, size_t *si
     if (esp_netif_sntp_sync_wait(pdMS_TO_TICKS(12000)) != ESP_OK) { failure = "Time sync failed"; goto done; }
     body.data = malloc(WORDBOOK_PACK_LIMIT);
     if (!body.data) { failure = "Not enough RAM"; goto done; }
-    uint32_t random_code[2];
-    esp_fill_random(random_code, sizeof(random_code));
-    snprintf(code, sizeof(code), "%08lx%08lx", (unsigned long)random_code[0], (unsigned long)random_code[1]);
-    snprintf(message, sizeof(message), "Web code:\n%.4s %.4s %.4s %.4s", code, code+4, code+8, code+12);
+    if (!device_identity(secret, qr)) { failure = "Device key unavailable"; goto done; }
+    snprintf(code, sizeof(code), "%04u", (unsigned)(esp_random() % 10000U));
+    deadline = esp_timer_get_time() + 120000000LL;
+    bool shown = false;
+    for (;;) {
+        int result = fetch_once(secret, code, &body);
+        if (result == 200) break;
+        if (result != 403) { failure = "Sync service unavailable"; goto done; }
+        if (esp_timer_get_time() >= deadline) { failure = "Pairing timed out"; goto done; }
+        if (!shown) { status(qr); shown = true; }
+        vTaskDelay(pdMS_TO_TICKS(4000));
+    }
+    snprintf(message, sizeof(message), "Web code:\n%s", code);
     status(message);
     deadline = esp_timer_get_time() + 120000000LL;
     failure = "No pack received";
     while (esp_timer_get_time() < deadline) {
-        int result = fetch_once(code, &body);
+        int result = fetch_once(secret, NULL, &body);
         if (result == 200 && body.size) { success = true; break; }
         if (result != 404) { failure = "Download failed"; break; }
         vTaskDelay(pdMS_TO_TICKS(4000));

@@ -213,8 +213,28 @@ static void save_progress(void)
 
 static void sync_status(const char *message)
 {
+    static lv_obj_t *qr;
     if (bsp_lvgl_lock(1000)) {
-        lv_label_set_text(s_body, message);
+        if (qr) { lv_obj_delete(qr); qr = NULL; }
+        if (strncmp(message, "WBPAIR1:", 8) == 0) {
+            lv_label_set_text(s_term, "Scan in WeChat");
+            lv_label_set_text(s_body, "");
+            qr = lv_qrcode_create(lv_obj_get_parent(s_body));
+            if (qr) {
+                lv_qrcode_set_size(qr, 148);
+                lv_obj_set_pos(qr, 46, 118);
+                lv_qrcode_set_quiet_zone(qr, true);
+                lv_qrcode_set_dark_color(qr, lv_color_black());
+                lv_qrcode_set_light_color(qr, lv_color_white());
+            }
+            if (!qr || lv_qrcode_update(qr, message, strlen(message)) != LV_RESULT_OK) {
+                if (qr) { lv_obj_delete(qr); qr = NULL; }
+                lv_label_set_text(s_body, "QR unavailable");
+            }
+        } else {
+            lv_label_set_text(s_term, "Today sync");
+            lv_label_set_text(s_body, message);
+        }
         bsp_lvgl_unlock();
     }
 }
