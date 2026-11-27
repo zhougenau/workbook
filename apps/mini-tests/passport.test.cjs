@@ -23,10 +23,26 @@ test('Passport selection is independent and limited to 20; invalid code makes no
   for (let index = 0; index < 21; index++) page.togglePassportWord.call(ctx, { currentTarget: { dataset: { id: String(index) } } })
   assert.equal(ctx.data.passportIds.length, 20)
   assert.equal(ctx.data.aiSelectedIds.length, 0)
+  ctx.data.passportStory = { key: 'old-selection' }
   page.togglePassportWord.call(ctx, { currentTarget: { dataset: { id: '1' } } })
+  assert.equal(ctx.data.passportStory, null)
   assert.equal(ctx.data.passportIds.length, 19)
   await page.sendPassportList.call(ctx)
   assert.match(ctx.data.passportMessage, /WEB CODE/)
+})
+
+test('Passport sends newest additions before recently edited older words', async () => {
+  let page, request
+  const word = (term, added, edited) => ({ id: require('node:crypto').randomUUID(), term, meaning: term, note: '', mastery: 0, createdAt: added, updatedAt: edited })
+  const jan = '2026-01-01T00:00:00.000Z', feb = '2026-02-01T00:00:00.000Z', mar = '2026-03-01T00:00:00.000Z'
+  const entries = [word('old', jan, mar), word('new', feb, feb), word('excluded', mar, mar)]
+  loadMini('pages/index/index.js', {
+    getStorageSync: key => key === 'wordbook-mini:data:v2' ? { version: 2, entries } : { token: 'fixture', expiresAt: '2099-01-01' },
+    request: options => { request = options; options.success({ statusCode: 200, data: { ok: true } }) },
+  }, config => { page = config })
+  const ctx = { data: { ...page.data, passportCode: '0007', passportIds: entries.slice(0, 2).map(entry => entry.id) }, setData(values) { Object.assign(this.data, values) } }
+  await page.sendPassportList.call(ctx)
+  assert.deepEqual(Array.from(request.data.entries, entry => entry.term), ['new', 'old'])
 })
 
 test('publish sends only selected fields under the session and clears a rejected session', async () => {
@@ -73,7 +89,11 @@ test('bound sessions separate the public pairing identifier, user PIN and device
   const hash = require('node:crypto').createHash('sha256').update(secret).digest('hex')
   let handler, owner, registered, pin, payload
   const admin = {
-    from() { return {
+    from(table) { if (table === 'vocabulary_entries') {
+      const query = { select() { return this }, eq(field, value) { assert.equal(field, 'user_id'); assert.equal(value, 'owner'); return this }, is(field, value) { assert.equal(field, 'deleted_at'); assert.equal(value, null); return this }, order(field, options) { assert.equal(options.ascending, field === 'id'); return this }, limit(count) { assert.equal(count, 10); return { data: [{ id: 'recent', term: 'recent', meaning: '新', note: '' }] } } }; return query
+    }
+    return {
+      select() { return { eq: (field, value) => ({ maybeSingle: () => ({ data: field === 'device_hash' && value === hash ? registered : null }) }) } },
       insert(row) { registered = row; return {} },
       update(values) { return { eq: (_field, key) => ({ select: () => ({ maybeSingle: () => {
         if (key !== registered.device_hash) return { data: null }; pin = values.pin; return { data: {} }
@@ -99,9 +119,24 @@ test('bound sessions separate the public pairing identifier, user PIN and device
   assert.equal((await call({}, { ...device, 'X-Passport-Start': '0007' })).status, 200)
   const publish = { code: '0007', entries: [{ id: 'id', term: 'term', meaning: '中', note: 'note' }] }
   assert.equal((await call(publish)).status, 200)
+  assert.equal((await call({}, { ...device, 'X-Passport-Recent': '11' })).status, 400)
+  assert.equal((await call({}, { 'X-Passport-Device': hash, 'X-Passport-Recent': '10' })).status, 403)
+  const recent = await call({ owner_id: 'untrusted' }, { ...device, 'X-Passport-Recent': '10' })
+  assert.equal(recent.status, 200)
+  assert.match(Buffer.from(await recent.arrayBuffer()).toString(), /recent/)
   assert.equal((await call({}, { 'X-Passport-Device': '0007' })).status, 403)
   assert.equal((await call({}, { 'X-Passport-Device': hash })).status, 404)
   const taken = await call({}, device); assert.equal(taken.status, 200)
   assert.equal(Buffer.from(await taken.arrayBuffer()).toString('hex'), '57425031016964007465726d00e4b8ad006e6f746500')
   assert.equal((await call({}, device)).status, 404)
+})
+
+test('story payload contains English, translation and target words after the entries', async () => {
+  const { encodePassportPack } = await import('../../supabase/functions/_shared/passport-pack.ts')
+  const words = ['oak', 'leaf', 'sun', 'rain', 'fall'].map(term => ({ id: term, term, meaning: term, note: '' }))
+  const story = { passage: 'Rain fell.', translation: '下雨了。' }
+  const pack = Buffer.from(encodePassportPack(words, story), 'base64')
+  assert.equal(pack.subarray(0, 5).toString(), 'WBP2\x05')
+  assert.deepEqual(pack.toString().split('\0').slice(-4), [story.passage, story.translation, 'oak, leaf, sun, rain, fall', ''])
+  assert.throws(() => encodePassportPack(words.slice(1), story))
 })

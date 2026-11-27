@@ -14,6 +14,20 @@ Deno.serve(async request => {
       if (!/^[0-9a-f]{64}$/.test(secret)) return reply(403, '未绑定')
       const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret))), byte => byte.toString(16).padStart(2, '0')).join('')
       const admin = createClient(url, service, { auth: { persistSession: false } })
+      const recent = request.headers.get('X-Passport-Recent')
+      if (recent !== null) {
+        if (recent !== '10' && recent !== '20') return reply(400, '数量无效')
+        const binding = await admin.from('passport_devices').select('owner_id').eq('device_hash', hash).maybeSingle()
+        if (binding.error) return reply(503, '服务不可用')
+        if (!binding.data) return reply(403, '请先扫码绑定')
+        const words = await admin.from('vocabulary_entries').select('id,term,meaning,note').eq('user_id', binding.data.owner_id).is('deleted_at', null).order('created_at', { ascending: false }).order('id', { ascending: true }).limit(Number(recent))
+        if (words.error) return reply(503, '读取失败')
+        if (!words.data?.length) return reply(404, '暂无词条')
+        try {
+          const pack = encodePassportPack(words.data)
+          return new Response(Uint8Array.from(atob(pack), char => char.charCodeAt(0)), { headers: { ...headers, 'Content-Type': 'application/octet-stream' } })
+        } catch { return reply(422, '最近词单超过设备限制') }
+      }
       const pin = request.headers.get('X-Passport-Start')
       if (pin !== null) {
         if (!/^\d{4}$/.test(pin)) return reply(400, '无效码')
@@ -40,7 +54,7 @@ Deno.serve(async request => {
     }
     if (typeof body?.code !== 'string' || !/^\d{4}$/.test(body.code) || !Array.isArray(body.entries) || !body.entries.length || body.entries.length > 20) return reply(400, '请选择词条并输入 4 位数字')
     let pack: string
-    try { pack = encodePassportPack(body.entries) } catch { return reply(400, '词条内容不符合 Passport 格式') }
+    try { pack = encodePassportPack(body.entries, body.story) } catch { return reply(400, '词条或短文不符合 Passport 格式') }
     const { data, error } = await owner.admin.rpc('passport_publish_pin', { account: owner.ownerId, digits: body.code, pack })
     if (error) return reply(503, '发送失败')
     return data ? reply(200) : reply(409, '请确认已绑定，或在设备上重新生成 4 位码')

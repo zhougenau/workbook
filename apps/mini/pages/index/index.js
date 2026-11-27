@@ -563,7 +563,7 @@ Page({
 
   togglePassport() {
     if (this.data.passportBusy) return
-    this.setData({ passportOpen: !this.data.passportOpen, selectionMode: false, passportIds: [], passportCode: '', passportMessage: '' }, () => this.refreshEntries())
+    this.setData({ passportOpen: !this.data.passportOpen, selectionMode: false, passportIds: [], passportCode: '', passportStory: null, passportMessage: '' }, () => this.refreshEntries())
   },
 
   togglePassportWord(event) {
@@ -571,7 +571,7 @@ Page({
     const id = event.currentTarget.dataset.id
     const ids = this.data.passportIds
     if (!ids.includes(id) && ids.length >= 20) return this.setData({ passportMessage: '最多选择 20 个词' })
-    this.setData({ passportIds: ids.includes(id) ? ids.filter(value => value !== id) : [...ids, id], passportMessage: '' }, () => this.refreshEntries())
+    this.setData({ passportIds: ids.includes(id) ? ids.filter(value => value !== id) : [...ids, id], passportStory: null, passportMessage: '' }, () => this.refreshEntries())
   },
 
   inputPassportCode(event) { this.setData({ passportCode: event.detail.value, passportMessage: '' }) },
@@ -585,6 +585,17 @@ Page({
     } })
   },
 
+  async preparePassportStory() {
+    const ids = this.data.passportIds.slice().sort()
+    if (this.data.passportBusy || ids.length < 5 || ids.length > 8) return
+    this.setData({ passportBusy: true })
+    try {
+      const story = await generatePassage(ids, 'short', this.data.aiProvider, 'passport-story')
+      this.setData({ passportStory: { passage: story.passage, translation: story.translation, key: ids.join(',') }, passportMessage: '' })
+    } catch (error) { this.setData({ passportMessage: error.message || '生成失败' }) }
+    finally { this.setData({ passportBusy: false }) }
+  },
+  removePassportStory() { this.setData({ passportStory: null }) },
   async sendPassportList() {
     if (this.data.passportBusy) return
     const code = this.data.passportCode.trim()
@@ -593,7 +604,8 @@ Page({
     if (!entries.length || entries.length !== this.data.passportIds.length || entries.length > 20) return this.setData({ passportMessage: '请重新选择 1 至 20 个词' })
     this.setData({ passportBusy: true, passportMessage: '' })
     try {
-      await publishPassport(entries, code)
+      const story = this.data.passportStory
+      await publishPassport(filterAndSortVocabularyEntries(entries, { sort: 'newest' }), code, story && story.key === this.data.passportIds.slice().sort().join(',') ? story : undefined)
       this.setData({ passportCode: '', passportMessage: '词单已发送，请在 Passport 上查看' })
     } catch (error) { this.setData({ passportMessage: error.message || '发送失败，请重试' }) }
     finally { this.setData({ passportBusy: false }) }

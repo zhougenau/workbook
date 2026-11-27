@@ -404,6 +404,8 @@
       <button bindtap="scanPassport" disabled="{{passportBusy}}">扫码绑定 Passport</button>
       <view class="search-box"><input type="number" value="{{passportCode}}" bindinput="inputPassportCode" disabled="{{passportBusy}}" maxlength="4" placeholder="设备上的 4 位 WEB CODE" /></view>
       <button bindtap="sendPassportList" loading="{{passportBusy}}" disabled="{{passportBusy || !passportIds.length || !passportCode}}">发送到 Passport</button>
+      <button bindtap="preparePassportStory" disabled="{{passportBusy || passportIds.length < 5 || passportIds.length > 8}}">生成今日短文（5–8 词）</button>
+      <view wx:if="{{passportStory}}"><view>{{passportStory.passage}}</view><view>{{passportStory.translation}}</view><button bindtap="removePassportStory">移除短文</button></view>
       <text wx:if="{{passportMessage}}" class="section-note">{{passportMessage}}</text>
     </view>
     <view class="search-box">

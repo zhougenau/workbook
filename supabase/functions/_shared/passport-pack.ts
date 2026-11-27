@@ -1,10 +1,10 @@
 export type Entry = { id: string; term: string; meaning: string; note: string }
 
-export function encodePassportPack(entries: Entry[]): string {
+export function encodePassportPack(entries: Entry[], story?: { passage: string; translation: string }): string {
   if (!entries.length || entries.length > 20) throw new Error('请选择 1 至 20 个单词')
   const encoder = new TextEncoder()
   const ids = new Set<string>()
-  let body = 'WBP1' + String.fromCharCode(entries.length)
+  let body = (story ? 'WBP2' : 'WBP1') + String.fromCharCode(entries.length)
   for (const entry of entries) {
     const fields = [entry.id, entry.term.trim(), entry.meaning.trim(), entry.note.trim()].map(value => value.replace(/\r\n?/g, '\n').replace(/\t/g, ' '))
     if (!/^[!-~]{1,64}$/.test(fields[0]) || ids.has(fields[0]) || !/^[a-zA-Z][a-zA-Z '-]{0,31}$/.test(fields[1]) ||
@@ -13,6 +13,14 @@ export function encodePassportPack(entries: Entry[]): string {
     }
     ids.add(fields[0])
     body += fields.join('\0') + '\0'
+  }
+  if (story) {
+    if (entries.length < 5 || entries.length > 8) throw new Error('短文需要 5 至 8 个词')
+    for (const part of [story.passage, story.translation, entries.map(entry => entry.term.trim()).join(', ')]) {
+      const text = part.trim().replace(/\r\n?/g, '\n').replace(/\t/g, ' ')
+      if (!text || encoder.encode(text).length > 2048 || /[\p{Cc}\p{Cs}]/u.test(text.replace(/\n/g, ''))) throw new Error('短文格式无效')
+      body += text + '\0'
+    }
   }
   const bytes = encoder.encode(body)
   if (bytes.length > 16384) throw new Error('词单超过 16 KiB，请减少单词')

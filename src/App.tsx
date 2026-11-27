@@ -193,6 +193,8 @@ function App() {
   const [flashcardSelecting, setFlashcardSelecting] = useState(false)
   const [selectedWordIds, setSelectedWordIds] = useState<string[]>([])
   const [passportSelecting, setPassportSelecting] = useState(false)
+  const [passportStory, setPassportStory] = useState<{key: string; passage: string; translation: string} | null>(null)
+  const [passportGenerating, setPassportGenerating] = useState(false)
   const [quickReviewRequest, setQuickReviewRequest] = useState(0)
   const [chatWord, setChatWord] = useState<VocabularyEntry | null>(null)
   const syncTimer = useRef<number | null>(null)
@@ -784,13 +786,27 @@ function App() {
     URL.revokeObjectURL(url)
   }
 
+  const preparePassportStory = async () => {
+    if (!supabase || !user || passportGenerating || selectedWords.length < 5 || selectedWords.length > 8) return
+    setPassportGenerating(true)
+    try {
+      const ids = selectedWords.map(word => word.id).sort()
+      const { data, error } = await supabase.functions.invoke('generate-passage', { body: { wordIds: ids, length: 'short', provider: aiProvider, format: 'passport-story' } })
+      if (error || !data?.passage || !data?.translation) throw new Error('短文生成失败，请检查同步状态和 AI 额度')
+      setPassportStory({key: ids.join(','), passage: data.passage, translation: data.translation})
+    } catch (error) { setMessage(error instanceof Error ? error.message : '短文生成失败') }
+    finally { setPassportGenerating(false) }
+  }
+
   const publishPassport = async () => {
     if (!supabase || !user) { setMessage('请先登录，再向 Passport 发送词单'); return }
     const code = window.prompt('输入已绑定 Passport 上的 4 位数字')?.trim()
     if (!code) return
     try {
       if (!/^\d{4}$/.test(code)) throw new Error('请输入 4 位数字，保留开头的 0')
-      const { error } = await supabase.functions.invoke('passport-bound', { body: { code, entries: selectedWords.map(({ id, term, meaning, note }) => ({ id, term, meaning, note })) } })
+      const newestFirst = filterAndSortVocabularyEntries(selectedWords, { sort: 'newest' })
+      const story = passportStory?.key === selectedWords.map(word => word.id).sort().join(',') ? passportStory : undefined
+      const { error } = await supabase.functions.invoke('passport-bound', { body: { code, story, entries: newestFirst.map(({ id, term, meaning, note }) => ({ id, term, meaning, note })) } })
       if (error) throw new Error('发送失败，请确认已扫码绑定，并在设备上重新生成确认码')
       setMessage('今日词单已发送，请在 Passport 上领取')
     } catch (error) { setMessage(error instanceof Error ? error.message : '发送失败') }
@@ -1236,6 +1252,8 @@ function App() {
               <div className="review-selection-bar">
                 <span>已选择 <strong>{selectedWordIds.length}</strong> / {entries.length} 个单词</span>
                 {passportSelecting && <button type="button" onClick={publishPassport} disabled={!selectedWordIds.length || selectedWordIds.length > 20}>发送到 Passport</button>}
+                {passportSelecting && <button type="button" onClick={preparePassportStory} disabled={passportGenerating || selectedWords.length < 5 || selectedWords.length > 8}>{passportGenerating ? '生成中…' : '生成今日短文（5–8 词）'}</button>}
+                {passportSelecting && passportStory?.key === selectedWords.map(word => word.id).sort().join(',') && <section><p>{passportStory.passage}</p><p>{passportStory.translation}</p><button onClick={() => setPassportStory(null)}>移除短文</button></section>}
                 <button type="button" onClick={() => toggleSelectAllWords(paginatedEntries.map((entry) => entry.id))}>
                   {onlyPageWordsSelected ? <X size={16} /> : <CheckSquare2 size={16} />}
                   {onlyPageWordsSelected ? '取消本页' : '一键全选'}

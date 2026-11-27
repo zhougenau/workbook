@@ -20,6 +20,7 @@ type PassageRequest = {
   wordIds: string[]
   length: PassageLength
   provider: AiProvider
+  passportStory: boolean
 }
 
 type VocabularyRow = {
@@ -51,7 +52,9 @@ function parseRequest(value: unknown): PassageRequest | null {
   const length = request.length
   const provider = parseAiProvider(request.provider)
   if (!provider || wordIds.length < 1 || wordIds.length > 60 || typeof length !== 'string' || !(length in lengthRanges)) return null
-  return { wordIds, length: length as PassageLength, provider }
+  const passportStory = request.format === 'passport-story'
+  if (passportStory && (wordIds.length < 5 || wordIds.length > 8 || length !== 'short')) return null
+  return { wordIds, length: length as PassageLength, provider, passportStory }
 }
 
 function countEnglishWords(value: string) {
@@ -82,7 +85,7 @@ function validatePassage(value: unknown, request: PassageRequest, words: Vocabul
 }
 
 function systemPrompt(request: PassageRequest) {
-  return `你是一位英语阅读材料创作者。请根据词汇数据创作一篇连贯、自然、有明确情境的英文短文，并只输出 JSON。
+  return `你是一位英语阅读材料创作者。请根据词汇数据创作一篇连贯、自然、有明确情境的英文短文，并只输出 JSON。${request.passportStory ? '请写一个有角色、事件和结局的小故事。使用短句，便于在掌上设备上分页阅读。' : ''}
 
 规则：
 1. 正文长度为${lengthRanges[request.length].instruction}。

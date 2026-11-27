@@ -180,8 +180,8 @@ async function getPaidUsage() {
   }
 }
 
-function generatePassage(wordIds, length, provider) {
-  return requestAi('/generate-passage', { wordIds, length, provider })
+function generatePassage(wordIds, length, provider, format) {
+  return requestAi('/generate-passage', { wordIds, length, provider, ...(format ? { format } : {}) })
 }
 
 function generateReview(wordIds, questionCount, difficulty, provider, mode = 'standard') {
@@ -219,13 +219,13 @@ module.exports = {
     if (!session) throw new Error('请先连接微信身份')
     return request('/passport-bound', { method: 'POST', header: { Authorization: `Bearer ${session.token}` }, data: { action: 'pair', device } })
   },
-  async publishPassport(entries, code) {
+  async publishPassport(entries, code, story) {
     const session = loadSession()
     if (!session) throw new Error('请先连接微信身份')
     try {
       const result = await request('/passport-bound', {
         method: 'POST', header: { Authorization: `Bearer ${session.token}` },
-        data: { code, entries: entries.map(({ id, term, meaning, note }) => ({ id, term, meaning, note: note || '' })) },
+        data: { code, ...(story ? { story } : {}), entries: entries.map(({ id, term, meaning, note }) => ({ id, term, meaning, note: note || '' })) },
       })
       if (!result || result.ok !== true) throw new Error('未确认发送成功，请重试')
     } catch (error) {
